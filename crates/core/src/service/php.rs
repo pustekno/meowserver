@@ -317,6 +317,8 @@ fn render_ini(layout: &Layout, config: &Config, installed: &Installed) -> Result
         if os() == Os::Windows {
             settings.insert("SMTP".into(), "127.0.0.1".into());
             settings.insert("smtp_port".into(), smtp.to_string());
+            // Windows mail() refuses to send without a sender address.
+            settings.insert("sendmail_from".into(), "meowserver@localhost".into());
         } else {
             let exe = mailpit.exe("mailpit").display().to_string();
             settings.insert("sendmail_path".into(), format!("\"{exe} sendmail -S 127.0.0.1:{smtp}\""));

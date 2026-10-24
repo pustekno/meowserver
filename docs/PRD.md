@@ -1101,7 +1101,7 @@ or another OS).
 | Feature | State | Feature | State |
 |---|---|---|---|
 | F1 start/stop, login item | Tested | F21 php.ini quick settings | Built |
-| F2 versions | Tested | F22 mail capture | Built |
+| F2 versions | Tested | F22 mail capture | Tested (PHP mail() → Mailpit) |
 | F3 official downloads | Tested (11 sources) | F23 database init | Tested |
 | F4 system binaries | Not started | F24 data per version | Tested |
 | F5 bring your own binary | Tested | F25 data upgrade | Tested (MariaDB 11.4 → 11.8) |
@@ -1111,7 +1111,7 @@ or another OS).
 | F9 parked folders | Tested | F29 terminal / `meow run` | Tested |
 | F10 document root detection | Tested | F30 tray | Tested |
 | F11 PHP per site | Tested on all three web servers | F31 logs | Tested |
-| F12 proxy sites | Built | F32 doctor | Tested |
+| F12 proxy sites | Tested | F32 doctor | Tested |
 | F13 quick create | Tested (blank, WordPress, Laravel) | F33 share | Built |
 | F14 localhost index | Tested | F34 languages | Tested (English, Indonesian) |
 | F15 suffix | Built | F35 CLI | Tested |
