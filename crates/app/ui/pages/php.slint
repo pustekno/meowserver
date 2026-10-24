@@ -85,11 +85,34 @@ export component PhpPage inherits VerticalLayout {
                 }
             }
             Card {
-                Text {
-                    text: @tr("Extensions");
-                    font-weight: 600;
+                HorizontalLayout {
+                    spacing: 10px;
+                    Text {
+                        text: @tr("Extensions");
+                        font-weight: 600;
+                        vertical-alignment: center;
+                    }
+                    Text {
+                        text: @tr("{} of {} on", Backend.extensions-enabled, Backend.extensions-total);
+                        color: Theme.muted;
+                        vertical-alignment: center;
+                        horizontal-stretch: 1;
+                    }
+                    LineEdit {
+                        width: 220px;
+                        text <=> Backend.extension-filter;
+                        placeholder-text: @tr("Search extensions");
+                        accessible-label: @tr("Search extensions");
+                        edited(text) => {
+                            Backend.search-extensions(text);
+                        }
+                    }
                 }
-                if Backend.extensions.length == 0: Text {
+                if Backend.extensions.length == 0 && Backend.extensions-total > 0: Text {
+                    text: @tr("No extension matches.");
+                    color: Theme.muted;
+                }
+                if Backend.extensions-total == 0: Text {
                     text: @tr("This PHP build has its extensions compiled in.");
                     color: Theme.muted;
                 }

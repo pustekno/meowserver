@@ -114,6 +114,9 @@ export global Backend {
     in property <[string]> php-versions;
     in-out property <int> php-index;
     in property <[ExtRow]> extensions;
+    in-out property <string> extension-filter;
+    in property <int> extensions-enabled;
+    in property <int> extensions-total;
     in property <[SettingRow]> ini-settings;
 
     // Databases.
@@ -163,6 +166,7 @@ export global Backend {
 
     callback select-php(int);
     callback toggle-extension(string, bool);
+    callback search-extensions(string);
     callback set-ini(string, string);
     callback save-php();
 

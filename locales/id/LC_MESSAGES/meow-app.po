@@ -296,3 +296,12 @@ msgstr "Pasang {}"
 
 msgid "Other versions are on the Versions page."
 msgstr "Versi lain ada di halaman Versi."
+
+msgid "{} of {} on"
+msgstr "{} dari {} aktif"
+
+msgid "Search extensions"
+msgstr "Cari ekstensi"
+
+msgid "No extension matches."
+msgstr "Tidak ada ekstensi yang cocok."

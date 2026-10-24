@@ -128,6 +128,8 @@ impl Ui {
 #[derive(Default)]
 struct Local {
     sites: Vec<site::Site>,
+    /// Every extension the selected PHP build ships, and the ones ticked.
+    php_available: Vec<String>,
     php_ext: BTreeSet<String>,
     php_ini: BTreeMap<String, String>,
     add_path: Option<PathBuf>,
@@ -473,15 +475,30 @@ fn wire(window: &AppWindow, ui: &Ui) {
             }
         }
     });
-    b.on_toggle_extension(|name, on| {
-        LOCAL.with(|l| {
-            let mut l = l.borrow_mut();
-            if on {
-                l.php_ext.insert(name.to_string());
-            } else {
-                l.php_ext.remove(name.as_str());
+    b.on_toggle_extension({
+        let weak = window.as_weak();
+        move |name, on| {
+            LOCAL.with(|l| {
+                let mut l = l.borrow_mut();
+                if on {
+                    l.php_ext.insert(name.to_string());
+                } else {
+                    l.php_ext.remove(name.as_str());
+                }
+            });
+            if let Some(w) = weak.upgrade() {
+                let count = LOCAL.with(|l| l.borrow().php_ext.len());
+                w.global::<Backend>().set_extensions_enabled(count as i32);
             }
-        });
+        }
+    });
+    b.on_search_extensions({
+        let weak = window.as_weak();
+        move |_| {
+            if let Some(w) = weak.upgrade() {
+                show_extensions(&w);
+            }
+        }
     });
     b.on_set_ini(|key, value| {
         LOCAL.with(|l| {
@@ -977,9 +994,6 @@ fn load_php(w: &AppWindow, layout: &Layout) {
     let extensions = selected_php(w, layout).map(|i| php::available_extensions(&i)).unwrap_or_default();
     let enabled: BTreeSet<String> =
         extensions.iter().filter(|e| config.php.extensions.contains(e)).cloned().collect();
-    b.set_extensions(model(
-        extensions.iter().map(|e| ExtRow { name: e.clone().into(), enabled: enabled.contains(e) }).collect(),
-    ));
     let settings: Vec<SettingRow> = INI_FIELDS
         .iter()
         .map(|(key, label)| {
@@ -991,9 +1005,29 @@ fn load_php(w: &AppWindow, layout: &Layout) {
     LOCAL.with(|l| {
         let mut l = l.borrow_mut();
         l.php_ext = enabled;
+        l.php_available = extensions;
         l.php_ini = settings.iter().map(|s| (s.key.to_string(), s.value.to_string())).collect();
     });
     b.set_ini_settings(model(settings));
+    show_extensions(w);
+}
+
+/// The extension list, narrowed by the search box. Ticks survive searching.
+fn show_extensions(w: &AppWindow) {
+    let b = w.global::<Backend>();
+    let filter = b.get_extension_filter().trim().to_lowercase();
+    LOCAL.with(|l| {
+        let l = l.borrow();
+        let rows: Vec<ExtRow> = l
+            .php_available
+            .iter()
+            .filter(|e| filter.is_empty() || e.contains(&filter))
+            .map(|e| ExtRow { name: e.clone().into(), enabled: l.php_ext.contains(e) })
+            .collect();
+        b.set_extensions(model(rows));
+        b.set_extensions_total(l.php_available.len() as i32);
+        b.set_extensions_enabled(l.php_ext.len() as i32);
+    });
 }
 
 fn run_doctor(ui: &Ui) {
