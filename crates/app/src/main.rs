@@ -14,8 +14,8 @@ mod tr;
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use anyhow::Result;
@@ -160,7 +160,6 @@ fn main() -> Result<()> {
     b.set_version(meow_core::VERSION.into());
     b.set_attribution(branding::ATTRIBUTION.into());
     b.set_root_dir(layout.root().display().to_string().into());
-    b.set_laragon_found(import::detect(None).is_some());
     b.set_defender_available(platform::os() == platform::Os::Windows);
     b.set_kinds(strings(KINDS.iter().map(|k| snapshot::title(*k).to_owned())));
     if let Some(e) = daemon_error {
@@ -172,6 +171,7 @@ fn main() -> Result<()> {
     load_php(&window, &layout);
     ui.refresh();
     run_doctor(&ui);
+    detect_importers(&ui);
 
     // Keep the view current while someone looks at it; do nothing while
     // the window is minimized (PRD §8.1: no busy work when idle).
@@ -285,9 +285,47 @@ fn wire(window: &AppWindow, ui: &Ui) {
             })
         }
     });
-    b.on_import_laragon({
+    // Import (PRD F27): look first, show the plan, copy only after Import.
+    let pending: Arc<Mutex<Option<(import::Tool, PathBuf)>>> = Arc::default();
+    b.on_preview_import({
         let ui = ui.clone();
-        move || ui.run(actions::import_laragon)
+        let pending = pending.clone();
+        move |id| {
+            let Some(tool) = import::Tool::parse(&id) else { return };
+            let pending = pending.clone();
+            ui.run(move |layout, ui| {
+                ui.progress(t("Looking at what can be imported…"));
+                let source = import::detect(tool, None).ok_or_else(|| {
+                    anyhow::anyhow!("{}", t("{} was not found.").replacen("{}", tool.name(), 1))
+                })?;
+                let plan = actions::import_plan(layout, &source);
+                ui.progress(String::new());
+                *pending.lock().unwrap() = Some((tool, source.root));
+                ui.on_ui(move |w| w.global::<Backend>().set_import_plan(plan.into()));
+                Ok(String::new())
+            })
+        }
+    });
+    b.on_confirm_import({
+        let ui = ui.clone();
+        let weak = window.as_weak();
+        let pending = pending.clone();
+        move || {
+            let Some((tool, root)) = pending.lock().unwrap().take() else { return };
+            if let Some(w) = weak.upgrade() {
+                w.global::<Backend>().set_import_plan(SharedString::new());
+            }
+            ui.run(move |layout, ui| actions::import_from(layout, ui, tool, &root))
+        }
+    });
+    b.on_cancel_import({
+        let weak = window.as_weak();
+        move || {
+            pending.lock().unwrap().take();
+            if let Some(w) = weak.upgrade() {
+                w.global::<Backend>().set_import_plan(SharedString::new());
+            }
+        }
     });
 
     // Sites.
@@ -1066,6 +1104,21 @@ fn run_doctor(ui: &Ui) {
                 })
                 .collect();
             w.global::<Backend>().set_problems(model(rows));
+        });
+    });
+}
+
+/// Looks for Laragon, XAMPP, WampServer, and FlyEnv off the UI thread
+/// (it measures their data folders) and offers an import for each found.
+fn detect_importers(ui: &Ui) {
+    let ui = ui.clone();
+    std::thread::spawn(move || {
+        let found: Vec<(&str, &str)> =
+            import::detect_all().iter().map(|s| (s.tool.id(), s.tool.name())).collect();
+        ui.on_ui(move |w| {
+            let rows =
+                found.into_iter().map(|(id, name)| Choice { id: id.into(), name: name.into() }).collect();
+            w.global::<Backend>().set_importers(model(rows));
         });
     });
 }

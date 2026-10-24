@@ -8,6 +8,7 @@
 import { Button, ComboBox, ScrollView, Switch } from "std-widgets.slint";
 import { Backend } from "../backend.slint";
 import { Card, Link, PageHeader, Theme } from "../widgets.slint";
+import { ImportChoices } from "import.slint";
 
 component Row inherits HorizontalLayout {
     in property <string> label;
@@ -142,6 +143,19 @@ export component SettingsPage inherits VerticalLayout {
                         }
                     }
                 }
+            }
+            Card {
+                Text {
+                    text: @tr("Import from another app");
+                }
+                Text {
+                    text: Backend.importers.length > 0
+                        ? @tr("Project folders are served where they are and databases are copied, so the other app keeps working.")
+                        : @tr("No Laragon, XAMPP, WampServer, or FlyEnv with projects or databases was found on this computer.");
+                    color: Theme.muted;
+                    wrap: word-wrap;
+                }
+                if Backend.importers.length > 0: ImportChoices { }
             }
             Card {
                 Row {

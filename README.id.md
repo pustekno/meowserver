@@ -24,7 +24,7 @@ Tanpa iklan. Tanpa telemetri. Tanpa akun.
 - HTTPS lokal dari satu CA yang hanya berlaku untuk `.localhost`, `.test`,
   dan komputer ini.
 - Mengunduh layanan dari sumber resminya dan memverifikasi checksum.
-- Bisa mengimpor instalasi Laragon, termasuk data MySQL.
+- Bisa mengimpor dari Laragon, XAMPP, WampServer, atau FlyEnv (terdeteksi otomatis), termasuk data MySQL/MariaDB.
 - Backup, restore, dan upgrade versi database dengan backup otomatis.
 - Ikon tray (±14 MB RAM) dan jendela native yang kecil. Tanpa Electron,
   tanpa webview.
@@ -34,7 +34,8 @@ Tanpa iklan. Tanpa telemetri. Tanpa akun.
 1. Ekstrak `MeowServer-<versi>-windows-x86_64.zip` ke mana saja, mis.
    `D:\MeowServer`.
 2. Jalankan `meowserver.exe`. Di Beranda pilih **Pasang paket yang
-   disarankan** (Caddy, PHP, MySQL 8.4) atau **Impor dari Laragon**.
+   disarankan** (Caddy, PHP, MySQL 8.4), atau impor dari Laragon, XAMPP,
+   WampServer, atau FlyEnv jika ditemukan.
 3. Taruh proyek di `www\`, atau pakai **Situs → Tambah proyek**. Buka
    `http://<nama>.localhost`.
 

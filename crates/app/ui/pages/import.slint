@@ -1,0 +1,50 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 PT Pusat Teknologi Nusantara and PT Puskomedia Indonesia Kreatif
+// Additional terms under GPLv3 section 7(b) apply; see NOTICE.
+
+// Import from another tool (PRD F27): a button per tool found, then the
+// plan to confirm. Used on Home (first run) and in Settings.
+
+import { Button } from "std-widgets.slint";
+import { Backend } from "../backend.slint";
+
+export component ImportChoices inherits VerticalLayout {
+    spacing: 8px;
+    if Backend.import-plan == "": HorizontalLayout {
+        spacing: 8px;
+        alignment: start;
+        for tool in Backend.importers: Button {
+            text: @tr("Import from {}", tool.name);
+            enabled: !Backend.busy;
+            clicked => {
+                Backend.preview-import(tool.id);
+            }
+        }
+    }
+    if Backend.import-plan != "": VerticalLayout {
+        spacing: 8px;
+        Text {
+            text: Backend.import-plan;
+            wrap: word-wrap;
+        }
+        HorizontalLayout {
+            spacing: 8px;
+            alignment: start;
+            Button {
+                text: @tr("Import");
+                primary: true;
+                enabled: !Backend.busy;
+                clicked => {
+                    Backend.confirm-import();
+                }
+            }
+            Button {
+                text: @tr("Cancel");
+                enabled: !Backend.busy;
+                clicked => {
+                    Backend.cancel-import();
+                }
+            }
+        }
+    }
+}

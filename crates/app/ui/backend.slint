@@ -84,7 +84,10 @@ export global Backend {
     in property <[ServiceRow]> services;
     in property <[CheckRow]> problems;
     in property <bool> needs-setup;
-    in property <bool> laragon-found;
+    // Other tools found to import from (Laragon, XAMPP, WampServer,
+    // FlyEnv), and the plan shown before anything is copied.
+    in property <[Choice]> importers;
+    in property <string> import-plan;
     in property <string> localhost-url;
     in property <string> setup-progress;
 
@@ -149,7 +152,9 @@ export global Backend {
     callback dismiss-message();
 
     callback quick-setup();
-    callback import-laragon();
+    callback preview-import(string);
+    callback confirm-import();
+    callback cancel-import();
 
     callback search(string);
     callback pick-folder();

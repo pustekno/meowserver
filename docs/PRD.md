@@ -279,10 +279,22 @@ restored with one action.
 *Done when:* a backup restores into a fresh data directory with identical
 row counts.
 
-**F27 — Import from Laragon.** Detect a Laragon install, then reuse its
-`www/` (as a parked folder, F9) and its MySQL/MariaDB data. The user chooses
-between copying the data (default when there is enough free space) or using
-it in place. Laragon must not be running at the same time.
+**F27 — Import from other tools.** Detect Laragon, XAMPP, WampServer, and
+FlyEnv automatically (their usual folders on every drive; FlyEnv from its
+data folder next to the install), then reuse their projects and MySQL/MariaDB
+data:
+
+| Tool | Projects | Data |
+|---|---|---|
+| Laragon | `DocumentRootList` in `usr/laragon.ini` (default `www/`), parked (F9) | `data/mysql-*`, `data/mariadb-*` |
+| XAMPP | each folder in `htdocs/` except XAMPP's own, added (F8) | `mysql/data` (MariaDB) |
+| WampServer | each folder in `www/` except Wamp's own, added | `bin/mysql/*/data`, `bin/mariadb/*/data` |
+| FlyEnv | sites in `server/host.json`, with their PHP version | `server/mysql/data-*`, `server/mariadb/data-*` |
+
+Project folders are served where they are; nothing is moved. Data is copied
+by default (the other tool keeps working) or used in place. The plan is shown
+and confirmed before anything is copied, and copying is refused while that
+tool's database server is running. The other tool's files are only read.
 *Done when:* the owner's Laragon setup with MySQL 8.4 data runs on MeowServer
 without dump or import.
 
@@ -382,7 +394,7 @@ each at its own `.localhost` name, without the user choosing ports.
 ### 6.1 First run
 
 1. **Language:** English or Indonesian.
-2. **Laragon detected?** Offer import (F27). Otherwise skip.
+2. **Laragon, XAMPP, WampServer, or FlyEnv detected?** Offer import (F27). Otherwise skip.
 3. **Projects:** where `www/` lives (default inside the MeowServer folder) and,
    optionally, folders to park (e.g. `D:\projects`).
 4. **Stack:** web server (Caddy preselected), PHP (latest stable preselected),
@@ -1031,7 +1043,7 @@ meow new laravel blog         quick create
 meow ssl trust                trust the local CA
 meow db backup mysql [db]
 meow db restore mysql <file>
-meow import laragon
+meow import [laragon|xampp|wamp|flyenv] [--dry-run]
 meow share <site>
 
 meow logs <service> [-f]
@@ -1094,7 +1106,7 @@ or another OS).
 |---|---|
 | 0 — Foundation | Done. Measurements in ADRs 0001–0004; F17 waits for the manual test in ADR 0005. |
 | 1 — Core on Windows | Done. |
-| 2 — GUI | Done, except drag-and-drop of folders (Slint 1.18 has no drop events) and a step-by-step first-run wizard (the Home page offers "Install recommended stack" and "Import from Laragon" instead). |
+| 2 — GUI | Done, except drag-and-drop of folders (Slint 1.18 has no drop events) and a step-by-step first-run wizard (the Home page offers "Install recommended stack" and an import for each tool found instead). |
 | 3 — Completeness | Done, with the "Built" items below. |
 | 4 — macOS and Linux | Not started beyond compiling: `core` and `meow` type-check for Linux and macOS, `meowd` and the window for macOS. No system-binary support (F4), installers, or signing yet. |
 
@@ -1106,7 +1118,7 @@ or another OS).
 | F4 system binaries | Not started | F24 data per version | Tested |
 | F5 bring your own binary | Tested | F25 data upgrade | Tested (MariaDB 11.4 → 11.8) |
 | F6 automatic sites | Tested (0.74 s) | F26 backup/restore | Tested (MySQL) |
-| F7 project list | Tested | F27 Laragon import | Dry run tested |
+| F7 project list | Tested | F27 import (Laragon, XAMPP, WampServer, FlyEnv) | Detection tested here (Laragon, FlyEnv) and with fixture folders (XAMPP, Wamp, FlyEnv sites); copy not yet run on real data |
 | F8 add project | Tested (no drag-and-drop) | F28 open in DB tool | Built |
 | F9 parked folders | Tested | F29 terminal / `meow run` | Tested |
 | F10 document root detection | Tested | F30 tray | Tested |
@@ -1169,6 +1181,7 @@ directly:
 | 2026-10-25 | Phase 0 results: Rust (ADR 0001), Slint software renderer (ADR 0002), Job Object per service (ADR 0003), `php-cgi` pool verified under load (ADR 0004), local DNS pending a manual admin test (ADR 0005), Xdebug from xdebug.org on Windows (ADR 0006). |
 | 2026-10-25 | Owner request: MeowServer's own errors can be reported by the user as a pre-filled GitHub issue; developers' site errors stay local (F38). |
 | 2026-10-25 | Owner request after slow Laragon sites on interns' laptops: performance rules in §8.7, Defender exclusions (F39), dev-server ports (F40). Evidence in ADR 0007. |
+| 2026-10-25 | Owner request: import is not Laragon-only. F27 now detects XAMPP, WampServer, and FlyEnv too, and shows the plan before copying. |
 
 No open questions remain for v1.0 scope. New questions are added here as they
 come up.

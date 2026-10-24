@@ -24,7 +24,7 @@ No ads. No telemetry. No account.
 - Local HTTPS from one certificate authority that can only vouch for
   `.localhost`, `.test`, and this computer.
 - Downloads services from their official sources and verifies checksums.
-- Imports an existing Laragon setup, including MySQL data.
+- Imports from Laragon, XAMPP, WampServer, or FlyEnv (found automatically), including MySQL/MariaDB data.
 - Database backup, restore, and version upgrades with an automatic backup.
 - A tray icon (≈14 MB of RAM) and a small native window. No Electron, no
   webview.
@@ -34,7 +34,8 @@ No ads. No telemetry. No account.
 1. Unzip `MeowServer-<version>-windows-x86_64.zip` anywhere, e.g.
    `D:\MeowServer`.
 2. Run `meowserver.exe`. On the Home page choose **Install recommended
-   stack** (Caddy, PHP, MySQL 8.4) or **Import from Laragon**.
+   stack** (Caddy, PHP, MySQL 8.4), or import from Laragon, XAMPP,
+   WampServer, or FlyEnv when one is found.
 3. Put a project in `www\`, or use **Sites → Add project**. Open
    `http://<name>.localhost`.
 

@@ -8,6 +8,7 @@
 import { Button, Switch, ScrollView } from "std-widgets.slint";
 import { Backend } from "../backend.slint";
 import { Card, Dot, Link, PageHeader, Theme } from "../widgets.slint";
+import { ImportChoices } from "import.slint";
 
 export component HomePage inherits VerticalLayout {
     spacing: Theme.gap;
@@ -59,14 +60,13 @@ export component HomePage inherits VerticalLayout {
                             Backend.quick-setup();
                         }
                     }
-                    if Backend.laragon-found: Button {
-                        text: @tr("Import from Laragon");
-                        enabled: !Backend.busy;
-                        clicked => {
-                            Backend.import-laragon();
-                        }
-                    }
                 }
+                if Backend.importers.length > 0: Text {
+                    text: @tr("Or bring your projects and databases from another app. Project folders stay where they are.");
+                    color: Theme.muted;
+                    wrap: word-wrap;
+                }
+                if Backend.importers.length > 0: ImportChoices { }
                 if Backend.setup-progress != "": Text {
                     text: Backend.setup-progress;
                     color: Theme.muted;

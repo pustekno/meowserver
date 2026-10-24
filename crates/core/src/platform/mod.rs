@@ -63,6 +63,25 @@ pub fn is_running(exe_name: &str) -> bool {
     imp::process_names().iter().any(|(_, n)| n.eq_ignore_ascii_case(exe_name))
 }
 
+/// True if a process named one of `stems` (without `.exe`) runs from inside
+/// `root` (lowercase). Where the full path is unknown, any such process
+/// counts, so callers err on the side of "in use".
+pub fn processes_under(root: &str, stems: &[&str]) -> bool {
+    imp::process_names().into_iter().any(|(pid, name)| {
+        let lower = name.to_ascii_lowercase();
+        let stem = lower.strip_suffix(".exe").unwrap_or(&lower);
+        if !stems.contains(&stem) {
+            return false;
+        }
+        match imp::process_path(pid) {
+            Some(path) if std::path::Path::new(&path).is_absolute() => {
+                path.to_lowercase().starts_with(root.trim_end_matches(['\\', '/']))
+            }
+            _ => true,
+        }
+    })
+}
+
 /// Runs a command with administrator rights after the OS prompt (UAC or a
 /// password dialog) and returns its exit code. Fails if the user declines.
 pub fn run_elevated(program: &std::path::Path, args: &[String]) -> std::io::Result<i32> {

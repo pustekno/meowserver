@@ -64,23 +64,23 @@ pub enum DefenderAction {
     Show,
 }
 
-#[derive(Subcommand)]
-pub enum ImportFrom {
-    /// Reuse Laragon's projects and MySQL/MariaDB data.
-    Laragon {
-        /// Laragon's folder (default C:\laragon).
-        #[arg(long)]
-        path: Option<PathBuf>,
-        /// Use the data folder where it is instead of copying it.
-        #[arg(long)]
-        in_place: bool,
-        /// Only show what would happen.
-        #[arg(long)]
-        dry_run: bool,
-        /// Do not ask for confirmation.
-        #[arg(long, short)]
-        yes: bool,
-    },
+#[derive(clap::Args)]
+pub struct ImportArgs {
+    /// laragon, xampp, wamp, or flyenv. Without it, the one tool found is
+    /// used; when several are found they are listed.
+    tool: Option<String>,
+    /// The tool's folder, when it is not in the usual place.
+    #[arg(long, requires = "tool")]
+    path: Option<PathBuf>,
+    /// Use the data folder where it is instead of copying it.
+    #[arg(long)]
+    in_place: bool,
+    /// Only show what would happen.
+    #[arg(long)]
+    dry_run: bool,
+    /// Do not ask for confirmation.
+    #[arg(long, short)]
+    yes: bool,
 }
 
 #[derive(Subcommand)]
@@ -404,16 +404,58 @@ pub fn defender(layout: &Layout, action: DefenderAction) -> Result<()> {
     Ok(())
 }
 
-pub fn import(layout: &Layout, from: ImportFrom) -> Result<()> {
-    let ImportFrom::Laragon { path, in_place, dry_run, yes } = from;
-    let laragon = import::detect(path.as_deref()).context("no Laragon installation found; pass --path")?;
+pub fn import(layout: &Layout, args: ImportArgs) -> Result<()> {
+    let ImportArgs { tool, path, in_place, dry_run, yes } = args;
+    let source = match tool.as_deref() {
+        None | Some("auto") => {
+            let mut found = import::detect_all();
+            match found.len() {
+                0 => {
+                    println!(
+                        "No Laragon, XAMPP, WampServer, or FlyEnv with projects or databases was found."
+                    );
+                    println!("If one is in an unusual place: meow import <tool> --path <folder>");
+                    return Ok(());
+                }
+                1 => found.remove(0),
+                _ => {
+                    println!("Found:");
+                    for s in &found {
+                        println!("  {:<8} {}", s.tool.id(), s.root.display());
+                    }
+                    println!("\nChoose one: meow import <tool>");
+                    return Ok(());
+                }
+            }
+        }
+        Some(id) => {
+            let tool = import::Tool::parse(id)
+                .with_context(|| format!("unknown tool {id:?}; use laragon, xampp, wamp, or flyenv"))?;
+            import::detect(tool, path.as_deref())
+                .with_context(|| format!("{} was not found; pass --path <folder>", tool.name()))?
+        }
+    };
     let mode = if in_place { import::Mode::InPlace } else { import::Mode::Copy };
-    println!("Found Laragon in {}.\n", laragon.root.display());
-    for step in import::describe(layout, &laragon, mode) {
+    println!("Found {} in {}.\n", source.tool.name(), source.root.display());
+    let steps = import::describe(layout, &source, mode);
+    if steps.is_empty() {
+        println!("It has no projects or databases to import.");
+        return Ok(());
+    }
+    for step in steps {
         println!("  - {step}");
     }
+    let running = import::in_use(&source).then(|| {
+        format!("{} is running; quit it first so its databases can be copied safely", source.tool.name())
+    });
     if dry_run {
+        if let Some(warning) = running {
+            println!("\nNote: {warning}.");
+        }
         return Ok(());
+    }
+    if let Some(warning) = running {
+        bail!("{warning}");
     }
     if !yes && !confirm("\nProceed?")? {
         println!("Nothing was changed.");
@@ -421,7 +463,7 @@ pub fn import(layout: &Layout, from: ImportFrom) -> Result<()> {
     }
     let mut config = Config::load(layout)?;
     let mut last = 0u64;
-    let notes = import::apply(layout, &mut config, &laragon, mode, &mut |done, total| {
+    let notes = import::apply(layout, &mut config, &source, mode, &mut |done, total| {
         if done - last > 64 << 20 || done == total {
             last = done;
             print!("\r  copying {} of {}", import::human(done), import::human(total));

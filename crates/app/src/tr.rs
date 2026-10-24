@@ -45,6 +45,18 @@ pub fn t(text: &str) -> String {
         "of" => "dari",
         "Starting…" => "Menjalankan…",
         "Copying databases" => "Menyalin database",
+        "Looking at what can be imported…" => "Memeriksa apa yang bisa diimpor…",
+        "{} was not found." => "{} tidak ditemukan.",
+        "Import from {} ({}):" => "Impor dari {} ({}):",
+        "serve every folder in {}" => "layani setiap folder di {}",
+        "copy the {} databases ({})" => "salin database {} ({})",
+        "Project folders stay where they are. Nothing in {} is changed." => {
+            "Folder proyek tetap di tempatnya. Tidak ada yang diubah di {}."
+        }
+        "{} is running. Quit it first so its databases can be copied safely." => {
+            "{} sedang berjalan. Tutup dulu agar database-nya bisa disalin dengan aman."
+        }
+        "Imported." => "Selesai diimpor.",
         "Trusted. Restart the browser if it was open." => {
             "Dipercaya. Mulai ulang browser jika sedang terbuka."
         }

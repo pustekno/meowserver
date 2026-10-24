@@ -152,11 +152,8 @@ enum Cmd {
         #[command(subcommand)]
         action: system::DefenderAction,
     },
-    /// Import projects and databases from another tool.
-    Import {
-        #[command(subcommand)]
-        from: system::ImportFrom,
-    },
+    /// Import projects and databases from Laragon, XAMPP, WampServer, or FlyEnv.
+    Import(system::ImportArgs),
     /// Prepare a problem report for MeowServer's developers.
     Report {
         /// Open the pre-filled GitHub issue in the browser.
@@ -232,7 +229,7 @@ fn run(cli: Cli) -> Result<()> {
         Cmd::Xdebug { state } => system::xdebug(&layout, state),
         Cmd::Login { state } => system::login(&layout, state),
         Cmd::UndoSystemChanges => system::undo(&layout),
-        Cmd::Import { from } => system::import(&layout, from),
+        Cmd::Import(args) => system::import(&layout, args),
         Cmd::Report { open } => system::report(&layout, open),
         Cmd::Privileged { .. } => unreachable!(),
     }

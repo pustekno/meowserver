@@ -58,8 +58,23 @@ msgstr "Belum ada yang terpasang. Paket yang disarankan: Caddy, PHP terbaru, dan
 msgid "Install recommended stack"
 msgstr "Pasang paket yang disarankan"
 
-msgid "Import from Laragon"
-msgstr "Impor dari Laragon"
+msgid "Import from {}"
+msgstr "Impor dari {}"
+
+msgid "Import"
+msgstr "Impor"
+
+msgid "Or bring your projects and databases from another app. Project folders stay where they are."
+msgstr "Atau bawa proyek dan database dari aplikasi lain. Folder proyek tetap di tempatnya."
+
+msgid "Import from another app"
+msgstr "Impor dari aplikasi lain"
+
+msgid "Project folders are served where they are and databases are copied, so the other app keeps working."
+msgstr "Folder proyek dilayani di tempatnya dan database disalin, jadi aplikasi lain tetap bisa dipakai."
+
+msgid "No Laragon, XAMPP, WampServer, or FlyEnv with projects or databases was found on this computer."
+msgstr "Tidak ditemukan Laragon, XAMPP, WampServer, atau FlyEnv yang berisi proyek atau database di komputer ini."
 
 msgid "Services"
 msgstr "Layanan"

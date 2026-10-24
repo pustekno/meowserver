@@ -6,12 +6,14 @@
 //! Each runs on its own thread; progress and results go back to the UI
 //! through `Ui`.
 
+use std::path::Path;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
 use meow_core::config::Config;
 use meow_core::download::{self, Progress};
 use meow_core::http::Http;
+use meow_core::import;
 use meow_core::ipc::{self, Client, Request};
 use meow_core::layout::Layout;
 use meow_core::provider::{self, Release};
@@ -81,11 +83,55 @@ pub fn quick_setup(layout: &Layout, ui: &Ui) -> Result<()> {
     Ok(())
 }
 
-pub fn import_laragon(layout: &Layout, ui: &Ui) -> Result<String> {
-    use meow_core::import;
-    let laragon = import::detect(None).context("Laragon was not found in C:\\laragon")?;
+/// What importing `source` will do, in the window's language, for the user
+/// to confirm before anything is copied.
+pub fn import_plan(layout: &Layout, source: &import::Source) -> String {
+    let fill = |template: &str, values: &[&str]| {
+        values.iter().fold(t(template), |text, v| text.replacen("{}", v, 1))
+    };
+    let suffix = Config::load(layout).unwrap_or_default().general.suffix.as_str().to_owned();
+    let mut lines =
+        vec![fill("Import from {} ({}):", &[source.tool.name(), &source.root.display().to_string()])];
+    for dir in &source.parked {
+        lines.push(format!("• {}", fill("serve every folder in {}", &[&dir.display().to_string()])));
+    }
+    for p in &source.projects {
+        lines.push(format!("• {} → {}.{suffix}", p.path.display(), p.name));
+    }
+    for db in &source.databases {
+        let version = db.version.clone().unwrap_or_default();
+        let what = format!("{} {version}", crate::snapshot::title(db.kind));
+        lines.push(format!(
+            "• {}",
+            fill("copy the {} databases ({})", &[what.trim(), &import::human(db.bytes)])
+        ));
+    }
+    lines.push(String::new());
+    lines.push(fill("Project folders stay where they are. Nothing in {} is changed.", &[source.tool.name()]));
+    if import::in_use(source) {
+        lines.push(fill(
+            "{} is running. Quit it first so its databases can be copied safely.",
+            &[source.tool.name()],
+        ));
+    }
+    lines.join("\n")
+}
+
+pub fn import_from(layout: &Layout, ui: &Ui, tool: import::Tool, root: &Path) -> Result<String> {
+    let source = import::detect(tool, Some(root))
+        .with_context(|| t("{} was not found.").replacen("{}", tool.name(), 1))?;
+    if import::in_use(&source) {
+        bail!(
+            "{}",
+            t("{} is running. Quit it first so its databases can be copied safely.").replacen(
+                "{}",
+                tool.name(),
+                1
+            )
+        );
+    }
     let mut config = Config::load(layout)?;
-    let notes = import::apply(layout, &mut config, &laragon, import::Mode::Copy, &mut |done, total| {
+    let notes = import::apply(layout, &mut config, &source, import::Mode::Copy, &mut |done, total| {
         ui.progress(format!(
             "{}: {} {} {}",
             t("Copying databases"),
@@ -97,7 +143,7 @@ pub fn import_laragon(layout: &Layout, ui: &Ui) -> Result<String> {
     config.save(layout)?;
     reload(layout);
     ui.progress(String::new());
-    Ok(notes.join("\n"))
+    Ok(format!("{}\n{}", t("Imported."), notes.join("\n")))
 }
 
 /// Tells a running `meowd` to apply `meow.toml` again; quietly does
