@@ -65,7 +65,11 @@ pub fn run(layout: &Layout) -> Vec<Check> {
             Some(i) => checks.push(Check::ok(format!("{} installed", kind.id()), i.version.to_string())),
             None => checks.push(Check::problem(
                 format!("{} installed", kind.id()),
-                format!("{} {} is not installed", kind.id(), selector.unwrap_or("")),
+                format!(
+                    "{} {}is not installed",
+                    kind.id(),
+                    selector.map(|s| format!("{s} ")).unwrap_or_default()
+                ),
                 format!("meow install {} {}", kind.id(), selector.unwrap_or("")).trim_end().to_owned(),
             )),
         }

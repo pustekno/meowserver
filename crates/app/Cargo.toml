@@ -20,5 +20,9 @@ serde_json.workspace = true
 slint = { version = "1.18", default-features = false, features = ["std", "compat-1-2", "backend-winit", "renderer-software", "accessibility"] }
 rfd = { version = "0.17", default-features = false }
 
+# Linux has no native folder dialog API; use the desktop portal.
+[target.'cfg(target_os = "linux")'.dependencies]
+rfd = { version = "0.17", default-features = false, features = ["xdg-portal"] }
+
 [build-dependencies]
 slint-build = "1.18"

@@ -668,8 +668,9 @@ Endpoint check, 2026-10-24:
 | PostgreSQL | `postgresql.org/versions.json` + EDB zip | ✅ | system | system | — |
 | Redis | GitHub `redis-windows/redis-windows` (community port) | ✅ | system | system | ✅ asset digest |
 | Mailpit | GitHub Releases API | ✅ | ✅ | ✅ | ✅ asset digest |
-| Node.js | `nodejs.org/dist/index.json` | ✅ | ✅ | ✅ | ✅ SHASUMS256 |
-| Composer | `getcomposer.org/download/latest-stable/` | ✅ | ✅ | ✅ | ✅ SHA-256 |
+| Node.js | `nodejs.org/dist/index.json` | ✅ | ✅ | ✅ | ✅ SHASUMS256.txt |
+| Composer | `getcomposer.org/versions` | ✅ | ✅ | ✅ | ✅ SHA-256 |
+| Xdebug | `xdebug.org/download/historical` | ✅ | system | system | ✅ SHA-256 (in the page) |
 
 "system" means MeowServer uses the binary installed by Homebrew/apt/dnf (F4)
 and still manages its config and process.
@@ -1081,6 +1082,51 @@ the team uses daily.
 | **4 — macOS and Linux** | Full parity; F4; packaging; CI on 3 OSes; signing | §5 checklist passes on all 3 OSes → **v1.0** |
 
 Windows comes first because that is where Laragon users are.
+
+### 16.1 Progress (2026-10-25)
+
+"Tested" means exercised on Windows 11 against real downloaded binaries.
+"Built" means implemented and compiling, not yet exercised end to end
+(usually because it needs an administrator prompt, a person at the screen,
+or another OS).
+
+| Phase | State |
+|---|---|
+| 0 — Foundation | Done. Measurements in ADRs 0001–0004; F17 waits for the manual test in ADR 0005. |
+| 1 — Core on Windows | Done. |
+| 2 — GUI | Done, except drag-and-drop of folders (Slint 1.18 has no drop events) and a step-by-step first-run wizard (the Home page offers "Install recommended stack" and "Import from Laragon" instead). |
+| 3 — Completeness | Done, with the "Built" items below. |
+| 4 — macOS and Linux | Not started beyond compiling: `core` and `meow` type-check for Linux and macOS, `meowd` and the window for macOS. No system-binary support (F4), installers, or signing yet. |
+
+| Feature | State | Feature | State |
+|---|---|---|---|
+| F1 start/stop, login item | Tested | F21 php.ini quick settings | Built |
+| F2 versions | Tested | F22 mail capture | Built |
+| F3 official downloads | Tested (11 sources) | F23 database init | Tested |
+| F4 system binaries | Not started | F24 data per version | Tested |
+| F5 bring your own binary | Tested | F25 data upgrade | Tested (MariaDB 11.4 → 11.8) |
+| F6 automatic sites | Tested (0.74 s) | F26 backup/restore | Tested (MySQL) |
+| F7 project list | Tested | F27 Laragon import | Dry run tested |
+| F8 add project | Tested (no drag-and-drop) | F28 open in DB tool | Built |
+| F9 parked folders | Tested | F29 terminal / `meow run` | Tested |
+| F10 document root detection | Tested | F30 tray | Tested |
+| F11 PHP per site | Tested on all three web servers | F31 logs | Tested |
+| F12 proxy sites | Built | F32 doctor | Tested |
+| F13 quick create | Tested (blank, WordPress, Laravel) | F33 share | Built |
+| F14 localhost index | Tested | F34 languages | Tested (English, Indonesian) |
+| F15 suffix | Built | F35 CLI | Tested |
+| F16 hosts entries | Built (needs UAC) | F36 undo system changes | Built |
+| F17 local DNS | Waiting for ADR 0005 test | F37 update notification | Built |
+| F18 local HTTPS | Tested; trust step needs a person | F38 problem reports | Tested (crash path built) |
+| F19 LAN access | Built | F39 Defender exclusions | Built (needs UAC) |
+| F20 Xdebug | Tested (PHP 8.4, 7.4) | F40 dev-server ports | Tested |
+
+Measured against §8.1 on the reference laptop: `meowd` 13.8 MB working set
+(2.6 MB private) and 0 ms CPU idle; window 38.5 MB working set (8.5 MB
+private), so `meowd` + window is about 52 MB working set against the 40 MB
+target, but 11 MB of private memory; the rest is shared system DLL pages.
+Start All 0.3 s; new folder to site 0.74 s; Laravel first request after a
+restart 0.08 s; portable download 11.0 MB.
 
 ## 17. Success measures
 
