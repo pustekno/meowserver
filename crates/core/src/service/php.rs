@@ -22,18 +22,20 @@ use crate::supervisor::{ProcessSpec, Restart};
 use crate::template;
 use crate::version::Version;
 
-/// FastCGI ports: 19000–19899, away from Xdebug's 9003 (PRD §9.10). Each
-/// PHP line has a fixed block of ten, so adding a version never moves the
-/// ports of one already running: 7.4 → 19240, 8.4 → 19340.
-const PORT_BASE: u16 = 19000;
+/// FastCGI ports: 19000–19899 by default (`[services.php] port`), away from
+/// Xdebug's 9003 (PRD §9.10). Each PHP line has a fixed block of ten, so
+/// adding a version never moves the ports of one already running:
+/// 7.4 → 19240, 8.4 → 19340. A second MeowServer folder running at the same
+/// time needs another base.
+pub const DEFAULT_PORT_BASE: u16 = 19000;
 const PORTS_PER_VERSION: u16 = 10;
 
-fn base_port(version: &Version) -> Result<u16> {
+fn base_port(port_base: u16, version: &Version) -> Result<u16> {
     let line = version.line();
     let (major, minor) = line.split_once('.').unwrap_or((&line, "0"));
     let index = major.parse::<u16>()? * 10 + minor.parse::<u16>()?.min(9);
     match index.checked_sub(50) {
-        Some(i) if i < 90 => Ok(PORT_BASE + i * PORTS_PER_VERSION),
+        Some(i) if i < 90 => Ok(port_base + i * PORTS_PER_VERSION),
         _ => bail!("PHP {version} is outside the supported range (5.0–13.9)"),
     }
 }
@@ -57,6 +59,11 @@ pub struct Plan {
 }
 
 impl Pool {
+    /// The TCP ports this pool listens on.
+    pub fn ports(&self) -> Vec<u16> {
+        self.upstreams.iter().filter_map(|u| u.rsplit(':').next()?.parse().ok()).collect()
+    }
+
     /// A name web server configs can use for this pool, e.g. `php-8-4-27`.
     /// Hyphens, not underscores: Apache rejects `_` in balancer names.
     pub fn name(&self) -> String {
@@ -115,7 +122,7 @@ pub fn plan(layout: &Layout, config: &Config, sites: &[Site]) -> Result<Plan> {
     needed.sort_by(|a, b| a.version.cmp(&b.version));
 
     for installed in needed {
-        let base = base_port(&installed.version)?;
+        let base = base_port(config.port("php", DEFAULT_PORT_BASE), &installed.version)?;
         let pool = build_pool(layout, config, installed, base)?;
         plan.pools.push(pool);
     }
@@ -356,7 +363,7 @@ mod tests {
 
     #[test]
     fn ports_are_fixed_per_line() {
-        let port = |v: &str| base_port(&v.parse().unwrap()).unwrap();
+        let port = |v: &str| base_port(DEFAULT_PORT_BASE, &v.parse().unwrap()).unwrap();
         assert_eq!(port("7.4.33"), 19240);
         assert_eq!(port("8.4.27"), 19340);
         assert_eq!(port("8.4.1"), 19340);

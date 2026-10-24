@@ -19,12 +19,13 @@ use crate::site::Site;
 use crate::supervisor::{Invocation, ProcessSpec, Restart};
 use crate::template;
 
-/// Caddy's admin API, on loopback only, at the top of MeowServer's range.
-const ADMIN: &str = "127.0.0.1:19999";
+/// Caddy's admin API, on loopback only, at the top of MeowServer's range
+/// (`[services.caddy] port`).
+pub const DEFAULT_ADMIN_PORT: u16 = 19999;
 
 #[derive(Serialize)]
 struct Context {
-    admin: &'static str,
+    admin: String,
     http_port: u16,
     https_port: u16,
     storage: PathBuf,
@@ -40,10 +41,11 @@ pub fn plan(layout: &Layout, config: &Config, sites: &[Site], php: &php::Plan) -
     let Some(installed) = super::select(layout, Kind::Caddy, config.version_selector("caddy")) else {
         bail!("Caddy is not installed. Run `meow install caddy`.");
     };
+    let admin = format!("127.0.0.1:{}", config.port("caddy", DEFAULT_ADMIN_PORT));
     let custom = layout.custom().join("caddy");
     let global = custom.join("global.caddy");
     let ctx = Context {
-        admin: ADMIN,
+        admin: admin.clone(),
         http_port: config.port("web", 80),
         https_port: config.tls_port("web", 443),
         storage: layout.data().join("caddy"),
@@ -63,7 +65,7 @@ pub fn plan(layout: &Layout, config: &Config, sites: &[Site], php: &php::Plan) -
         vec![verb.into(), "--config".into(), caddyfile.clone().into(), "--adapter".into(), "caddyfile".into()]
     };
     let mut reload_args = config_args("reload");
-    reload_args.extend(["--address".into(), ADMIN.into()]);
+    reload_args.extend(["--address".into(), admin.into()]);
     Ok(Planned {
         spec: ProcessSpec {
             id: "caddy".into(),

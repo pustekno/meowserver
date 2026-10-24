@@ -18,11 +18,12 @@ use meow_core::provider::{self, Release};
 use meow_core::service::{self, Kind};
 
 use crate::Ui;
+use crate::tr::t;
 
 /// Downloads `selector` (or the newest) of `kind`, reporting progress.
 pub fn install(layout: &Layout, ui: &Ui, kind: Kind, selector: Option<&str>) -> Result<String> {
     let name = crate::snapshot::title(kind);
-    ui.progress(format!("{name}: looking for versions…"));
+    ui.progress(format!("{name}: {}", t("looking for versions…")));
     let provider = provider::for_service(kind).context("this service cannot be downloaded on this system")?;
     let http = Http::new();
     let releases = provider.releases(&http)?;
@@ -42,7 +43,9 @@ pub fn install(layout: &Layout, ui: &Ui, kind: Kind, selector: Option<&str>) -> 
         }
         last = Instant::now();
         let text = match total {
-            Some(t) if t > 0 => format!("{name} {version}: {}% of {:.0} MB", got * 100 / t, t as f64 / 1e6),
+            Some(total) if total > 0 => {
+                format!("{name} {version}: {}% {} {:.0} MB", got * 100 / total, t("of"), total as f64 / 1e6)
+            }
             _ => format!("{name} {version}: {:.1} MB", got as f64 / 1e6),
         };
         ui.progress(text);
@@ -56,7 +59,7 @@ pub fn install(layout: &Layout, ui: &Ui, kind: Kind, selector: Option<&str>) -> 
         release,
         Progress { on_asset: &mut on_asset, on_bytes: &mut on_bytes },
     )?;
-    ui.progress(format!("{name} {version} installed."));
+    ui.progress(format!("{name} {version} {}", t("installed.")));
     Ok(version)
 }
 
@@ -72,7 +75,7 @@ pub fn quick_setup(layout: &Layout, ui: &Ui) -> Result<()> {
     let mut config = Config::load(layout)?;
     config.versions.insert("mysql".into(), "8.4".into());
     config.save(layout)?;
-    ui.progress("Starting…".into());
+    ui.progress(t("Starting…"));
     ipc::ensure_running(layout, false)?.call(Request::StartAll)?;
     ui.progress(String::new());
     Ok(())
@@ -83,7 +86,13 @@ pub fn import_laragon(layout: &Layout, ui: &Ui) -> Result<String> {
     let laragon = import::detect(None).context("Laragon was not found in C:\\laragon")?;
     let mut config = Config::load(layout)?;
     let notes = import::apply(layout, &mut config, &laragon, import::Mode::Copy, &mut |done, total| {
-        ui.progress(format!("Copying databases: {} of {}", import::human(done), import::human(total)));
+        ui.progress(format!(
+            "{}: {} {} {}",
+            t("Copying databases"),
+            import::human(done),
+            t("of"),
+            import::human(total)
+        ));
     })?;
     config.save(layout)?;
     reload(layout);

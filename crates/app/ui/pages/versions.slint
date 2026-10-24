@@ -2,11 +2,68 @@
 // Copyright (C) 2026 PT Pusat Teknologi Nusantara and PT Puskomedia Indonesia Kreatif
 // Additional terms under GPLv3 section 7(b) apply; see NOTICE.
 
-// Versions (PRD F2, F3): installed, active, and downloadable versions.
+// Versions (PRD F2, F3): every service in a visible list, grouped, and for
+// the selected one its installed, active, and downloadable versions.
 
-import { Button, ComboBox, ScrollView } from "std-widgets.slint";
+import { Button, ScrollView } from "std-widgets.slint";
 import { Backend } from "../backend.slint";
-import { Card, PageHeader, Theme } from "../widgets.slint";
+import { Card, NavItem, PageHeader, Theme } from "../widgets.slint";
+
+component Group inherits Text {
+    color: Theme.muted;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+// Indices into Backend.kinds; the order is fixed in src/main.rs (KINDS).
+component KindList inherits VerticalLayout {
+    spacing: 4px;
+    alignment: start;
+    Group {
+        text: @tr("Web server");
+    }
+    for i in [1, 2, 3]: NavItem {
+        label: Backend.kinds[i];
+        active: Backend.kind-index == i;
+        clicked => {
+            Backend.kind-index = i;
+            Backend.select-kind(i);
+        }
+    }
+    Group {
+        text: "PHP";
+    }
+    for i in [0, 10]: NavItem {
+        label: Backend.kinds[i];
+        active: Backend.kind-index == i;
+        clicked => {
+            Backend.kind-index = i;
+            Backend.select-kind(i);
+        }
+    }
+    Group {
+        text: @tr("Databases");
+    }
+    for i in [4, 5, 6]: NavItem {
+        label: Backend.kinds[i];
+        active: Backend.kind-index == i;
+        clicked => {
+            Backend.kind-index = i;
+            Backend.select-kind(i);
+        }
+    }
+    Group {
+        text: @tr("Other");
+    }
+    for i in [7, 8, 9]: NavItem {
+        label: Backend.kinds[i];
+        active: Backend.kind-index == i;
+        clicked => {
+            Backend.kind-index = i;
+            Backend.select-kind(i);
+        }
+    }
+}
 
 export component VersionsPage inherits VerticalLayout {
     spacing: Theme.gap;
@@ -14,103 +71,106 @@ export component VersionsPage inherits VerticalLayout {
     PageHeader {
         title: @tr("Versions");
         subtitle: @tr("Downloads come from each project's official source.");
-        ComboBox {
-            width: 160px;
-            model: Backend.kinds;
-            current-index <=> Backend.kind-index;
-            accessible-label: @tr("Service");
-            selected => {
-                Backend.select-kind(self.current-index);
-            }
+    }
+
+    HorizontalLayout {
+        spacing: 16px;
+
+        KindList {
+            width: 170px;
         }
-    }
 
-    if Backend.install-progress != "": Text {
-        text: Backend.install-progress;
-        color: Theme.muted;
-        wrap: word-wrap;
-    }
-
-    sv := ScrollView {
-        VerticalLayout {
-            width: sv.visible-width;
-            spacing: Theme.gap;
-            alignment: start;
-            Card {
-                Text {
-                    text: @tr("Installed");
-                    font-weight: 600;
-                }
-                if Backend.installed-versions.length == 0: Text {
-                    text: @tr("None installed.");
-                    color: Theme.muted;
-                }
-                for v in Backend.installed-versions: HorizontalLayout {
-                    spacing: 10px;
-                    height: 34px;
+        sv := ScrollView {
+            horizontal-stretch: 1;
+            VerticalLayout {
+                width: sv.visible-width;
+                spacing: Theme.gap;
+                alignment: start;
+                Card {
                     Text {
-                        text: v.version;
-                        vertical-alignment: center;
-                        width: 120px;
-                        font-weight: v.active ? 600 : 400;
-                    }
-                    Text {
-                        text: v.active ? @tr("active") : "";
-                        vertical-alignment: center;
-                        color: Theme.ok;
-                        horizontal-stretch: 1;
-                    }
-                    Button {
-                        text: @tr("Use");
-                        enabled: !v.active && !Backend.busy;
-                        clicked => {
-                            Backend.use-version(v.version);
-                        }
-                    }
-                    Button {
-                        text: @tr("Remove");
-                        enabled: !v.active && !Backend.busy;
-                        clicked => {
-                            Backend.uninstall-version(v.version);
-                        }
-                    }
-                }
-            }
-            Card {
-                HorizontalLayout {
-                    Text {
-                        text: @tr("Available");
+                        text: Backend.kinds[Backend.kind-index];
+                        font-size: 16px;
                         font-weight: 600;
-                        horizontal-stretch: 1;
-                        vertical-alignment: center;
                     }
-                    Button {
-                        text: Backend.loading-available ? @tr("Loading…") : @tr("Check for versions");
-                        enabled: !Backend.loading-available;
-                        clicked => {
-                            Backend.load-available();
+                    Text {
+                        text: @tr("Installed");
+                        font-weight: 600;
+                    }
+                    if Backend.installed-versions.length == 0: Text {
+                        text: @tr("None installed.");
+                        color: Theme.muted;
+                    }
+                    for v in Backend.installed-versions: HorizontalLayout {
+                        spacing: 10px;
+                        height: 34px;
+                        Text {
+                            text: v.version;
+                            vertical-alignment: center;
+                            width: 120px;
+                            font-weight: v.active ? 600 : 400;
+                        }
+                        Text {
+                            text: v.active ? @tr("active") : "";
+                            vertical-alignment: center;
+                            color: Theme.ok;
+                            horizontal-stretch: 1;
+                        }
+                        Button {
+                            text: @tr("Use");
+                            enabled: !v.active && !Backend.busy;
+                            clicked => {
+                                Backend.use-version(v.version);
+                            }
+                        }
+                        Button {
+                            text: @tr("Remove");
+                            enabled: !v.active && !Backend.busy;
+                            clicked => {
+                                Backend.uninstall-version(v.version);
+                            }
                         }
                     }
                 }
-                for v in Backend.available-versions: HorizontalLayout {
-                    spacing: 10px;
-                    height: 34px;
-                    Text {
-                        text: v.version;
-                        vertical-alignment: center;
-                        width: 120px;
+                Card {
+                    HorizontalLayout {
+                        Text {
+                            text: @tr("Available");
+                            font-weight: 600;
+                            horizontal-stretch: 1;
+                            vertical-alignment: center;
+                        }
+                        Button {
+                            text: Backend.loading-available ? @tr("Loading…") : @tr("Check again");
+                            enabled: !Backend.loading-available;
+                            clicked => {
+                                Backend.load-available();
+                            }
+                        }
                     }
-                    Text {
-                        text: v.verified ? "" : @tr("no official checksum");
-                        vertical-alignment: center;
+                    if Backend.loading-available && Backend.available-versions.length == 0: Text {
+                        text: @tr("Loading…");
                         color: Theme.muted;
-                        horizontal-stretch: 1;
                     }
-                    Button {
-                        text: v.installed ? @tr("Installed") : @tr("Install");
-                        enabled: !v.installed && !Backend.busy;
-                        clicked => {
-                            Backend.install-version(v.version);
+                    for v in Backend.available-versions: HorizontalLayout {
+                        spacing: 10px;
+                        height: 34px;
+                        Text {
+                            text: v.version;
+                            vertical-alignment: center;
+                            width: 120px;
+                        }
+                        Text {
+                            text: v.verified ? "" : @tr("no official checksum");
+                            vertical-alignment: center;
+                            color: Theme.muted;
+                            horizontal-stretch: 1;
+                        }
+                        Button {
+                            text: v.installed ? @tr("Installed") : @tr("Install");
+                            enabled: !v.installed && !Backend.busy;
+                            clicked => {
+                                Backend.install-version(v.version);
+                            }
                         }
                     }
                 }

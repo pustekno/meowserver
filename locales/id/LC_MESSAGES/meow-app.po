@@ -30,8 +30,6 @@ msgstr "Tutup"
 msgid "Reachable from this computer only. Default user without a password."
 msgstr "Hanya bisa diakses dari komputer ini. Pengguna bawaan tanpa password."
 
-msgid "No database server installed. Install MySQL, MariaDB, or PostgreSQL on the Versions page."
-msgstr "Belum ada server database. Pasang MySQL, MariaDB, atau PostgreSQL di halaman Versi."
 
 msgid "Stop"
 msgstr "Hentikan"
@@ -192,8 +190,6 @@ msgstr "Belum ada situs. Buat folder di www/ atau pakai Tambah proyek."
 msgid "Downloads come from each project's official source."
 msgstr "Unduhan diambil dari sumber resmi masing-masing proyek."
 
-msgid "Service"
-msgstr "Layanan"
 
 msgid "Installed"
 msgstr "Terpasang"
@@ -213,8 +209,6 @@ msgstr "Tersedia"
 msgid "Loading…"
 msgstr "Memuat…"
 
-msgid "Check for versions"
-msgstr "Cek versi"
 
 msgid "no official checksum"
 msgstr "tanpa checksum resmi"
@@ -284,3 +278,21 @@ msgstr "Beri tahu saya jika ada versi baru"
 
 msgid "Checks GitHub once a day. Nothing is downloaded or sent."
 msgstr "Mengecek GitHub sekali sehari. Tidak ada yang diunduh atau dikirim."
+
+msgid "Working…"
+msgstr "Sedang bekerja…"
+
+msgid "Other"
+msgstr "Lainnya"
+
+msgid "No database server yet. Install one:"
+msgstr "Belum ada server database. Pasang salah satu:"
+
+msgid "Install another database server:"
+msgstr "Pasang server database lain:"
+
+msgid "Install {}"
+msgstr "Pasang {}"
+
+msgid "Other versions are on the Versions page."
+msgstr "Versi lain ada di halaman Versi."

@@ -4,7 +4,7 @@
 
 // The MeowServer window (PRD §6.2): a sidebar and one page at a time.
 
-import { Palette } from "std-widgets.slint";
+import { Palette, Spinner } from "std-widgets.slint";
 import { Backend } from "backend.slint";
 import { Link, NavItem, Theme } from "widgets.slint";
 import { HomePage } from "pages/home.slint";
@@ -73,6 +73,26 @@ export component AppWindow inherits Window {
             padding: 20px;
             spacing: 12px;
             horizontal-stretch: 1;
+
+            if Backend.busy: Rectangle {
+                border-radius: Theme.radius;
+                background: Theme.card;
+                HorizontalLayout {
+                    padding: 10px;
+                    spacing: 10px;
+                    Spinner {
+                        indeterminate: true;
+                        width: 20px;
+                        height: 20px;
+                    }
+                    Text {
+                        text: Backend.task != "" ? Backend.task : @tr("Working…");
+                        vertical-alignment: center;
+                        horizontal-stretch: 1;
+                        overflow: elide;
+                    }
+                }
+            }
 
             if Backend.message != "": Rectangle {
                 border-radius: Theme.radius;

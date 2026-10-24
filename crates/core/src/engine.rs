@@ -212,11 +212,21 @@ impl Engine {
             Unit::Php => {
                 let plan = php::plan(&self.layout, &ctx.config, &ctx.sites)?;
                 state.warnings.extend(plan.warnings.iter().cloned());
+                for pool in &plan.pools {
+                    if pool.specs.iter().any(|s| !self.supervisor.is_running(&s.id)) {
+                        for port in pool.ports() {
+                            self.ensure_port_free("php", port)?;
+                        }
+                    }
+                }
                 plan.pools.into_iter().flat_map(|p| p.specs).collect()
             }
             Unit::Web => {
                 let php_plan = php::plan(&self.layout, &ctx.config, &ctx.sites)?;
                 let planned = plan_web(&self.layout, &ctx.config, &ctx.sites, &php_plan)?;
+                if planned.spec.id == "caddy" && !self.supervisor.is_running("caddy") {
+                    self.ensure_port_free("caddy", ctx.config.port("caddy", caddy::DEFAULT_ADMIN_PORT))?;
+                }
                 state.web_reload = planned.reload;
                 vec![planned.spec]
             }

@@ -74,6 +74,7 @@ impl Ui {
     pub fn progress(&self, text: String) {
         self.on_ui(move |ui| {
             let b = ui.global::<Backend>();
+            b.set_task(text.clone().into());
             b.set_setup_progress(text.clone().into());
             b.set_install_progress(text.into());
         });
@@ -107,7 +108,10 @@ impl Ui {
         std::thread::spawn(move || {
             let outcome = job(&ui.layout, &ui);
             ui.on_ui(move |w| {
-                w.global::<Backend>().set_busy(false);
+                let b = w.global::<Backend>();
+                b.set_busy(false);
+                b.set_task(SharedString::new());
+                b.set_setup_running(false);
                 match outcome {
                     Ok(text) if text.is_empty() => {}
                     Ok(text) => show(w, &text, false),
@@ -115,6 +119,7 @@ impl Ui {
                 }
             });
             ui.refresh();
+            run_doctor(&ui);
         });
     }
 }
@@ -250,7 +255,11 @@ fn wire(window: &AppWindow, ui: &Ui) {
 
     b.on_quick_setup({
         let ui = ui.clone();
+        let weak = window.as_weak();
         move || {
+            if let Some(w) = weak.upgrade() {
+                w.global::<Backend>().set_setup_running(true);
+            }
             ui.run(|l, ui| {
                 actions::quick_setup(l, ui)?;
                 Ok(t("Ready. Put a project in www/ or use Sites → Add project."))
@@ -360,6 +369,7 @@ fn wire(window: &AppWindow, ui: &Ui) {
         move |_| {
             if let Some(w) = weak.upgrade() {
                 load_versions(&w, &layout);
+                w.global::<Backend>().invoke_load_available();
             }
         }
     });
@@ -685,6 +695,18 @@ fn wire(window: &AppWindow, ui: &Ui) {
             })
         }
     });
+    b.on_install_service({
+        let ui = ui.clone();
+        move |id| {
+            let Some(kind) = Kind::from_id(&id) else { return };
+            // MySQL: the LTS line, which is what Laragon users have.
+            let selector = (kind == Kind::Mysql).then_some("8.4");
+            ui.run(move |l, ui| {
+                let version = actions::install(l, ui, kind, selector)?;
+                Ok(format!("{} {version} {}", snapshot::title(kind), t("installed.")))
+            });
+        }
+    });
     b.on_db_open({
         let ui = ui.clone();
         move |unit| {
@@ -790,6 +812,17 @@ fn apply(w: &AppWindow, snap: &snapshot::Snapshot, local: &mut Local) {
     let mut choices = vec!["default".to_owned()];
     choices.extend(snap.php_lines.iter().cloned());
     b.set_php_choices(strings(choices));
+    let installed_ids: Vec<&str> = snap.databases.iter().map(|d| d.unit.id()).collect();
+    b.set_missing_databases(model(
+        [("mysql", "MySQL"), ("mariadb", "MariaDB"), ("postgres", "PostgreSQL")]
+            .into_iter()
+            .filter(|(id, _)| !installed_ids.contains(id))
+            .filter(|(id, _)| {
+                Kind::from_id(id).is_some_and(|k| meow_core::provider::for_service(k).is_some())
+            })
+            .map(|(id, name)| Choice { id: id.into(), name: name.into() })
+            .collect(),
+    ));
     b.set_databases(model(
         snap.databases
             .iter()

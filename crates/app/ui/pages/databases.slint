@@ -16,11 +16,6 @@ export component DatabasesPage inherits VerticalLayout {
         subtitle: @tr("Reachable from this computer only. Default user without a password.");
     }
 
-    if Backend.databases.length == 0: Text {
-        text: @tr("No database server installed. Install MySQL, MariaDB, or PostgreSQL on the Versions page.");
-        color: Theme.muted;
-        wrap: word-wrap;
-    }
 
     sv := ScrollView {
         VerticalLayout {
@@ -76,6 +71,27 @@ export component DatabasesPage inherits VerticalLayout {
                     text: db.data-dir;
                     color: Theme.muted;
                     overflow: elide;
+                }
+            }
+            if Backend.missing-databases.length > 0: Card {
+                Text {
+                    text: Backend.databases.length == 0 ? @tr("No database server yet. Install one:") : @tr("Install another database server:");
+                    font-weight: 600;
+                }
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    for choice in Backend.missing-databases: Button {
+                        text: @tr("Install {}", choice.name);
+                        enabled: !Backend.busy;
+                        clicked => {
+                            Backend.install-service(choice.id);
+                        }
+                    }
+                }
+                Text {
+                    text: @tr("Other versions are on the Versions page.");
+                    color: Theme.muted;
                 }
             }
         }

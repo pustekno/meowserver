@@ -54,6 +54,11 @@ export struct SettingRow {
     value: string,
 }
 
+export struct Choice {
+    id: string,
+    name: string,
+}
+
 export struct DbRow {
     unit: string,
     name: string,
@@ -69,6 +74,9 @@ export global Backend {
     in property <string> headline;
     in property <bool> any-running;
     in property <bool> busy;
+    // What the current long task is doing; shown on every page.
+    in property <string> task;
+    in property <bool> setup-running;
     in property <string> message;
     in property <bool> message-is-error;
 
@@ -110,6 +118,8 @@ export global Backend {
 
     // Databases.
     in property <[DbRow]> databases;
+    // Database servers not installed yet, offered for one-click install.
+    in property <[Choice]> missing-databases;
 
     // Settings.
     in property <int> language-index;
@@ -167,6 +177,7 @@ export global Backend {
     callback set-xdebug(bool);
     callback db-backup(string);
     callback db-open(string);
+    callback install-service(string);
     callback trust-ca();
     callback undo-system();
     callback show-create(bool);

@@ -38,7 +38,7 @@ export component HomePage inherits VerticalLayout {
             spacing: Theme.gap;
             alignment: start;
 
-            if Backend.needs-setup: Card {
+            if Backend.needs-setup || Backend.setup-running: Card {
                 Text {
                     text: @tr("Welcome to MeowServer");
                     font-size: 16px;

@@ -40,6 +40,10 @@ pub fn t(text: &str) -> String {
         "Added" => "Ditambahkan",
         "Created" => "Dibuat",
         "Saved" => "Disimpan",
+        "looking for versions…" => "mencari versi…",
+        "of" => "dari",
+        "Starting…" => "Menjalankan…",
+        "Copying databases" => "Menyalin database",
         "Trusted. Restart the browser if it was open." => {
             "Dipercaya. Mulai ulang browser jika sedang terbuka."
         }
