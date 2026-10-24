@@ -14,6 +14,11 @@ use serde::Serialize;
 
 const TEMPLATES: &[(&str, &str)] = &[
     ("caddy/Caddyfile", include_str!("../../../templates/caddy/Caddyfile.j2")),
+    ("nginx/nginx.conf", include_str!("../../../templates/nginx/nginx.conf.j2")),
+    ("apache/httpd.conf", include_str!("../../../templates/apache/httpd.conf.j2")),
+    ("index/index.html", include_str!("../../../templates/index/index.html.j2")),
+    ("mysql/my.ini", include_str!("../../../templates/mysql/my.ini.j2")),
+    ("redis/redis.conf", include_str!("../../../templates/redis/redis.conf.j2")),
     ("php/php.ini", include_str!("../../../templates/php/php.ini.j2")),
     ("php/php-fpm.conf", include_str!("../../../templates/php/php-fpm.conf.j2")),
 ];

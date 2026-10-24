@@ -6,15 +6,17 @@
 
 use std::ffi::OsString;
 use std::path::PathBuf;
+use std::time::Duration;
 
 use anyhow::{Result, bail};
 use serde::Serialize;
 
+use super::web::{self, Planned, TemplateSite};
 use super::{Kind, php, write_generated};
 use crate::config::Config;
 use crate::layout::Layout;
 use crate::site::Site;
-use crate::supervisor::{ProcessSpec, Restart};
+use crate::supervisor::{Invocation, ProcessSpec, Restart};
 use crate::template;
 
 /// Caddy's admin API, on loopback only, at the top of MeowServer's range.
@@ -28,64 +30,56 @@ struct Context {
     storage: PathBuf,
     custom_dir: PathBuf,
     global_override: Option<PathBuf>,
-    bind: Option<&'static str>,
-    sites: Vec<SiteContext>,
+    listen: Vec<&'static str>,
+    index_dir: PathBuf,
+    sites: Vec<TemplateSite>,
 }
 
-#[derive(Serialize)]
-struct SiteContext {
-    host: String,
-    docroot: PathBuf,
-    proxy: Option<String>,
-    php: Option<Vec<String>>,
-    #[serde(rename = "override")]
-    override_file: Option<PathBuf>,
-}
-
-/// Writes the Caddyfile and returns the process to run.
-pub fn plan(layout: &Layout, config: &Config, sites: &[Site], php: &php::Plan) -> Result<ProcessSpec> {
+pub fn plan(layout: &Layout, config: &Config, sites: &[Site], php: &php::Plan) -> Result<Planned> {
     let Some(installed) = super::select(layout, Kind::Caddy, config.version_selector("caddy")) else {
         bail!("Caddy is not installed. Run `meow install caddy`.");
     };
     let custom = layout.custom().join("caddy");
-    std::fs::create_dir_all(custom.join("sites"))?;
-    let existing = |path: PathBuf| path.exists().then_some(path);
-
+    let global = custom.join("global.caddy");
     let ctx = Context {
         admin: ADMIN,
         http_port: config.port("web", 80),
         https_port: config.tls_port("web", 443),
         storage: layout.data().join("caddy"),
-        custom_dir: custom.clone(),
-        global_override: existing(custom.join("global.caddy")),
-        bind: (!config.general.lan_access).then_some("127.0.0.1 [::1]"),
-        sites: sites
-            .iter()
-            .map(|site| SiteContext {
-                host: site.host.clone(),
-                docroot: site.docroot.clone(),
-                proxy: site.proxy.clone(),
-                php: php.upstreams(site).map(<[String]>::to_vec),
-                override_file: existing(custom.join("sites").join(format!("{}.caddy", site.name))),
-            })
-            .collect(),
+        global_override: global.exists().then_some(global),
+        custom_dir: custom,
+        listen: web::listen(config, &[]),
+        index_dir: web::write_index(layout, config, sites, php)?,
+        sites: web::sites(layout, Kind::Caddy, sites, php),
     };
     let caddyfile = layout.generated().join("caddy").join("Caddyfile");
     write_generated(&caddyfile, &template::render("caddy/Caddyfile", ctx)?)?;
 
     // Keep Caddy's own state inside the MeowServer folder (PRD §3, portable).
     let state = layout.data().join("caddy");
-    Ok(ProcessSpec {
-        id: "caddy".into(),
-        program: installed.exe("caddy"),
-        args: vec!["run".into(), "--config".into(), caddyfile.into(), "--adapter".into(), "caddyfile".into()],
-        env: vec![
-            (OsString::from("XDG_DATA_HOME"), state.clone().into()),
-            (OsString::from("XDG_CONFIG_HOME"), state.into()),
-        ],
-        cwd: Some(installed.dir.clone()),
-        log: layout.logs().join("caddy.log"),
-        restart: Restart::OnFailure,
-        graceful_stop: None,
+    let config_args = |verb: &str| -> Vec<OsString> {
+        vec![verb.into(), "--config".into(), caddyfile.clone().into(), "--adapter".into(), "caddyfile".into()]
+    };
+    let mut reload_args = config_args("reload");
+    reload_args.extend(["--address".into(), ADMIN.into()]);
+    Ok(Planned {
+        spec: ProcessSpec {
+            id: "caddy".into(),
+            program: installed.exe("caddy"),
+            args: config_args("run"),
+            env: vec![
+                (OsString::from("XDG_DATA_HOME"), state.clone().into()),
+                (OsString::from("XDG_CONFIG_HOME"), state.into()),
+            ],
+            cwd: Some(installed.dir.clone()),
+            log: layout.logs().join("caddy.log"),
+            restart: Restart::OnFailure,
+            graceful_stop: None,
+        },
+        reload: Some(Invocation {
+            program: installed.exe("caddy"),
+            args: reload_args,
+            timeout: Duration::from_secs(10),
+        }),
     })
 }

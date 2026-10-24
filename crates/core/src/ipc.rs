@@ -25,6 +25,15 @@ pub enum Request {
     Status,
     StartAll,
     StopAll,
+    Start {
+        unit: String,
+    },
+    Stop {
+        unit: String,
+    },
+    Restart {
+        unit: String,
+    },
     /// Re-read `meow.toml` and the project folders, then apply changes.
     Reload,
     /// Stop all services and exit `meowd`.

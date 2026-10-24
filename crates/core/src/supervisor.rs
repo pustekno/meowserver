@@ -35,11 +35,23 @@ pub struct ProcessSpec {
     pub restart: Restart,
     /// A command that asks the service to shut down cleanly, run before
     /// the process tree is killed (e.g. `mysqladmin shutdown`).
-    pub graceful_stop: Option<StopCommand>,
+    pub graceful_stop: Option<Invocation>,
 }
 
+impl ProcessSpec {
+    /// True if both would start the same program the same way.
+    pub fn same_command(&self, other: &ProcessSpec) -> bool {
+        self.program == other.program
+            && self.args == other.args
+            && self.env == other.env
+            && self.cwd == other.cwd
+    }
+}
+
+/// A one-off helper command, such as `mysqladmin shutdown` or
+/// `caddy reload`.
 #[derive(Debug, Clone)]
-pub struct StopCommand {
+pub struct Invocation {
     pub program: PathBuf,
     pub args: Vec<OsString>,
     pub timeout: Duration,
@@ -116,12 +128,28 @@ impl Supervisor {
 
     /// Starts a process unless one with the same id is already running.
     pub fn start(&self, spec: ProcessSpec) -> Result<()> {
-        let mut entries = self.entries.lock().unwrap();
-        if let Some(entry) = entries.get(&spec.id) {
-            if !matches!(*entry.shared.state.lock().unwrap(), State::Stopped | State::Failed { .. }) {
-                return Ok(());
+        let running_differs = {
+            let entries = self.entries.lock().unwrap();
+            match entries.get(&spec.id) {
+                Some(entry)
+                    if !matches!(
+                        *entry.shared.state.lock().unwrap(),
+                        State::Stopped | State::Failed { .. }
+                    ) =>
+                {
+                    if entry.shared.spec.same_command(&spec) {
+                        return Ok(());
+                    }
+                    true
+                }
+                _ => false,
             }
+        };
+        // Same id, different command (e.g. a new port): replace it.
+        if running_differs {
+            self.stop(&spec.id)?;
         }
+        let mut entries = self.entries.lock().unwrap();
         let shared = Arc::new(Shared {
             spec,
             state: Mutex::new(State::Starting),
@@ -297,7 +325,12 @@ fn watch(shared: Arc<Shared>, first: (std::process::Child, ProcessTree)) {
     }
 }
 
-fn run_graceful_stop(stop: &StopCommand) -> bool {
+fn run_graceful_stop(stop: &Invocation) -> bool {
+    run(stop)
+}
+
+/// Runs a helper command to completion; true if it succeeded in time.
+pub fn run(stop: &Invocation) -> bool {
     let mut cmd = Command::new(&stop.program);
     cmd.args(&stop.args).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
     match platform::spawn_service(&mut cmd) {

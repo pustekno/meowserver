@@ -38,6 +38,8 @@ pub struct General {
     pub autostart: Vec<String>,
     pub editor: Option<String>,
     pub lan_access: bool,
+    /// Write hosts entries for every site (PRD F16).
+    pub manage_hosts: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -69,6 +71,11 @@ pub enum WebServer {
 pub struct ServiceSettings {
     pub port: Option<u16>,
     pub tls_port: Option<u16>,
+    /// A second port some services have, e.g. Mailpit's web inbox.
+    pub web_port: Option<u16>,
+    /// Database data folder, when not the default `data/<service>-<version>`
+    /// (e.g. Laragon's, used in place; PRD F27).
+    pub data_dir: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -118,6 +125,7 @@ impl Default for General {
             autostart: vec!["web".into(), "php".into(), "mysql".into()],
             editor: None,
             lan_access: false,
+            manage_hosts: true,
         }
     }
 }
@@ -182,6 +190,10 @@ impl Config {
 
     pub fn tls_port(&self, service: &str, default: u16) -> u16 {
         self.services.get(service).and_then(|s| s.tls_port).unwrap_or(default)
+    }
+
+    pub fn web_port(&self, service: &str, default: u16) -> u16 {
+        self.services.get(service).and_then(|s| s.web_port).unwrap_or(default)
     }
 
     pub fn version_selector(&self, service: &str) -> Option<&str> {

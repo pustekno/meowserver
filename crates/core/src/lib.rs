@@ -7,18 +7,26 @@
 //! `meowd`, `meow`, and `meowserver` only call into this crate (PRD §11).
 
 pub mod config;
+pub mod defender;
+pub mod doctor;
 pub mod download;
 pub mod engine;
+pub mod hosts;
 pub mod http;
+pub mod import;
 pub mod ipc;
 pub mod layout;
 pub mod logging;
+pub mod logs;
 pub mod platform;
 pub mod provider;
+pub mod report;
 pub mod service;
 pub mod site;
 pub mod supervisor;
 pub mod template;
+pub mod terminal;
 pub mod version;
+pub mod watch;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

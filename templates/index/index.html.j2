@@ -1,0 +1,49 @@
+{#- SPDX-License-Identifier: GPL-3.0-or-later
+    Copyright (C) 2026 PT Pusat Teknologi Nusantara and PT Puskomedia Indonesia Kreatif
+    Additional terms under GPLv3 section 7(b) apply; see NOTICE. -#}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MeowServer</title>
+<style>
+  :root { --bg: #fafaf9; --fg: #1c1917; --muted: #78716c; --line: #e7e5e4; --accent: #ea7a1a; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #1c1917; --fg: #f5f5f4; --muted: #a8a29e; --line: #44403c; --accent: #f59e4b; }
+  }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 system-ui, sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 32px 16px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  p.sub { color: var(--muted); margin: 0 0 24px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; font-size: 13px; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { font-size: 13px; color: var(--muted); word-break: break-all; }
+  footer { margin-top: 32px; color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>MeowServer</h1>
+  <p class="sub">{{ web_server }} · PHP {{ php_version }}{% for s in services %} · {{ s }}{% endfor %}</p>
+{% if sites %}
+  <table>
+    <tr><th>Site</th><th>Folder</th><th>PHP</th></tr>
+{% for site in sites %}
+    <tr>
+      <td><a href="{{ site.url }}">{{ site.host }}</a></td>
+      <td><code>{{ site.target }}</code></td>
+      <td>{{ site.php }}</td>
+    </tr>
+{% endfor %}
+  </table>
+{% else %}
+  <p>No sites yet. Create a folder in <code>{{ www }}</code> or add a project in MeowServer.</p>
+{% endif %}
+  <footer>Originally created by <a href="https://pustekno.id">Pustekno</a> and <a href="https://www.puskomedia.id">Puskomedia</a>.</footer>
+</main>
+</body>
+</html>

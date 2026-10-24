@@ -83,6 +83,11 @@ fn install_into(
     let mut sources = Vec::new();
     for asset in &release.assets {
         (progress.on_asset)(asset);
+        let expected = match (&asset.sha256, &asset.sha256_url) {
+            (Some(h), _) => Some(h.clone()),
+            (None, Some(url)) => Some(crate::provider::fetch_checksum(http, url, asset.file_name())?),
+            (None, None) => None,
+        };
         let file = layout.tmp().join(file_name(&asset.url));
         let sha256 = http.download(&asset.url, &file, progress.on_bytes);
         let sha256 = match sha256 {
@@ -92,7 +97,7 @@ fn install_into(
                 return Err(e);
             }
         };
-        let verified = match &asset.sha256 {
+        let verified = match &expected {
             Some(expected) if !expected.eq_ignore_ascii_case(&sha256) => {
                 let _ = std::fs::remove_file(&file);
                 bail!(
@@ -106,7 +111,7 @@ fn install_into(
         let extracted = extract(&file, &asset.archive, &staging.join("extract"));
         let _ = std::fs::remove_file(&file);
         extracted?;
-        merge_stripped(&staging.join("extract"), &content)?;
+        merge_stripped(&staging.join("extract"), &content, asset.root.as_deref())?;
         sources.push(ReceiptSource { url: asset.url.clone(), sha256, verified });
     }
     Ok(sources)
@@ -177,10 +182,17 @@ fn extract_tar_gz(archive: &Path, dest: &Path) -> Result<()> {
 /// Moves the extracted files into `content`. If the archive wrapped
 /// everything in one top-level folder (e.g. `nginx-1.31.8/`), that folder
 /// is stripped.
-fn merge_stripped(extracted: &Path, content: &Path) -> Result<()> {
+fn merge_stripped(extracted: &Path, content: &Path, root: Option<&str>) -> Result<()> {
     let entries: Vec<_> = std::fs::read_dir(extracted)?.collect::<Result<_, _>>()?;
-    let root = match entries.as_slice() {
-        [only] if only.file_type()?.is_dir() => only.path(),
+    let root = match (root, entries.as_slice()) {
+        (Some(root), _) => {
+            let dir = extracted.join(root);
+            if !dir.is_dir() {
+                bail!("the archive has no {root} folder");
+            }
+            dir
+        }
+        (None, [only]) if only.file_type()?.is_dir() => only.path(),
         _ => extracted.to_path_buf(),
     };
     for entry in std::fs::read_dir(&root)? {
@@ -213,7 +225,7 @@ mod tests {
         std::fs::create_dir_all(extracted.join("nginx-1.0").join("conf")).unwrap();
         std::fs::write(extracted.join("nginx-1.0").join("nginx.exe"), b"").unwrap();
         std::fs::create_dir_all(&content).unwrap();
-        merge_stripped(&extracted, &content).unwrap();
+        merge_stripped(&extracted, &content, None).unwrap();
         assert!(content.join("nginx.exe").exists());
         assert!(content.join("conf").is_dir());
         std::fs::remove_dir_all(&tmp).unwrap();

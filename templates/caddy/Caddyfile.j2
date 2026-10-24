@@ -14,25 +14,41 @@
 	https_port {{ https_port }}
 	storage file_system {{ storage | slashes | quote }}
 }
-
 {% if global_override %}
-import {{ global_override | slashes | quote }}
 
+import {{ global_override | slashes | quote }}
 {% endif %}
+
+http://localhost, http://127.0.0.1 {
+{% if listen %}
+	bind {{ listen | join(" ") }}
+{% endif %}
+	root * {{ index_dir | slashes | quote }}
+	file_server
+}
+
+# Any other name: say so instead of an empty page.
+http:// {
+{% if listen %}
+	bind {{ listen | join(" ") }}
+{% endif %}
+	respond "No MeowServer site is named {host}. See http://localhost{% if http_port != 80 %}:{{ http_port }}{% endif %}/ for the list." 404
+}
 {% for site in sites %}
+
 {% if site.override %}
 import {{ site.override | slashes | quote }}
 {% else %}
 http://{{ site.host }} {
-{% if bind %}
-	bind {{ bind }}
+{% if listen %}
+	bind {{ listen | join(" ") }}
 {% endif %}
 {% if site.proxy %}
 	reverse_proxy {{ site.proxy }}
 {% else %}
 	root * {{ site.docroot | slashes | quote }}
-{% if site.php %}
-	php_fastcgi {{ site.php | join(" ") }} {
+{% if site.upstreams %}
+	php_fastcgi {{ site.upstreams | join(" ") }} {
 		lb_policy round_robin
 		lb_try_duration 5s
 	}
@@ -41,5 +57,4 @@ http://{{ site.host }} {
 {% endif %}
 }
 {% endif %}
-
 {% endfor %}

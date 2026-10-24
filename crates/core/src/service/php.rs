@@ -22,9 +22,21 @@ use crate::supervisor::{ProcessSpec, Restart};
 use crate::template;
 use crate::version::Version;
 
-/// FastCGI ports: 19000–19899, away from Xdebug's 9003 (PRD §9.10).
+/// FastCGI ports: 19000–19899, away from Xdebug's 9003 (PRD §9.10). Each
+/// PHP line has a fixed block of ten, so adding a version never moves the
+/// ports of one already running: 7.4 → 19240, 8.4 → 19340.
 const PORT_BASE: u16 = 19000;
-const PORTS_PER_VERSION: u16 = 20;
+const PORTS_PER_VERSION: u16 = 10;
+
+fn base_port(version: &Version) -> Result<u16> {
+    let line = version.line();
+    let (major, minor) = line.split_once('.').unwrap_or((&line, "0"));
+    let index = major.parse::<u16>()? * 10 + minor.parse::<u16>()?.min(9);
+    match index.checked_sub(50) {
+        Some(i) if i < 90 => Ok(PORT_BASE + i * PORTS_PER_VERSION),
+        _ => bail!("PHP {version} is outside the supported range (5.0–13.9)"),
+    }
+}
 /// Each `php-cgi` exits after this many requests and is replaced, which
 /// keeps leaks in long-running workers in check.
 const MAX_REQUESTS: &str = "1000";
@@ -44,14 +56,27 @@ pub struct Plan {
     pub warnings: Vec<String>,
 }
 
+impl Pool {
+    /// A name web server configs can use for this pool, e.g. `php-8-4-27`.
+    /// Hyphens, not underscores: Apache rejects `_` in balancer names.
+    pub fn name(&self) -> String {
+        format!("php-{}", self.installed.version.to_string().replace('.', "-"))
+    }
+}
+
 impl Plan {
-    /// FastCGI upstreams for a site, or `None` if it does not run PHP.
-    pub fn upstreams(&self, site: &Site) -> Option<&[String]> {
+    /// The pool serving a site, or `None` if it does not run PHP.
+    pub fn pool_for(&self, site: &Site) -> Option<&Pool> {
         if matches!(site.framework, Framework::Proxy | Framework::Static) {
             return None;
         }
         let index = self.site_pool.get(&site.name).copied().or(self.default_pool)?;
-        Some(&self.pools[index].upstreams)
+        Some(&self.pools[index])
+    }
+
+    /// The pool used by sites that do not pin a version.
+    pub fn default_pool(&self) -> Option<&Pool> {
+        self.default_pool.map(|i| &self.pools[i])
     }
 }
 
@@ -68,13 +93,19 @@ pub fn plan(layout: &Layout, config: &Config, sites: &[Site]) -> Result<Plan> {
     let mut pins: BTreeMap<String, Version> = BTreeMap::new();
     for site in sites {
         let Some(selector) = &site.php else { continue };
-        match super::select(layout, Kind::Php, Some(selector)) {
-            Some(found) => {
-                pins.insert(site.name.clone(), found.version.clone());
-                if !needed.iter().any(|i| i.version == found.version) {
+        let line = selector.split('.').take(2).collect::<Vec<_>>().join(".");
+        match super::select(layout, Kind::Php, Some(&line)) {
+            // One pool per line: a site pinned to 8.4 shares the default
+            // pool when that is also 8.4.
+            Some(found) => match needed.iter().find(|i| i.version.line() == found.version.line()) {
+                Some(existing) => {
+                    pins.insert(site.name.clone(), existing.version.clone());
+                }
+                None => {
+                    pins.insert(site.name.clone(), found.version.clone());
                     needed.push(found);
                 }
-            }
+            },
             None => plan.warnings.push(format!(
                 "{} asks for PHP {selector}, which is not installed; using PHP {} instead",
                 site.name, default.version
@@ -83,8 +114,8 @@ pub fn plan(layout: &Layout, config: &Config, sites: &[Site]) -> Result<Plan> {
     }
     needed.sort_by(|a, b| a.version.cmp(&b.version));
 
-    for (i, installed) in needed.into_iter().enumerate() {
-        let base = PORT_BASE + i as u16 * PORTS_PER_VERSION;
+    for installed in needed {
+        let base = base_port(&installed.version)?;
         let pool = build_pool(layout, config, installed, base)?;
         plan.pools.push(pool);
     }
@@ -97,18 +128,30 @@ pub fn plan(layout: &Layout, config: &Config, sites: &[Site]) -> Result<Plan> {
     Ok(plan)
 }
 
+/// Writes the generated `php.ini` for `installed` and returns its folder,
+/// for `PHPRC` in terminals (PRD F29).
+pub fn write_ini(layout: &Layout, config: &Config, installed: &Installed) -> Result<PathBuf> {
+    let dir = layout.generated().join("php").join(installed.version.to_string());
+    write_generated(&dir.join("php.ini"), &render_ini(layout, config, installed)?)?;
+    Ok(dir)
+}
+
+/// `PHP_INI_SCAN_DIR`: the user's extra `.ini` folders.
+pub fn scan_dirs(layout: &Layout, installed: &Installed) -> Result<OsString> {
+    let custom = layout.custom().join("php");
+    let custom_line = custom.join(installed.version.line());
+    std::fs::create_dir_all(&custom_line)?;
+    Ok(std::env::join_paths([&custom, &custom_line])?)
+}
+
 fn build_pool(layout: &Layout, config: &Config, installed: Installed, base: u16) -> Result<Pool> {
     let version = installed.version.to_string();
     let dir = layout.generated().join("php").join(&version);
     let ini = dir.join("php.ini");
     write_generated(&ini, &render_ini(layout, config, &installed)?)?;
 
-    let custom = layout.custom().join("php");
-    let custom_line = custom.join(installed.version.line());
-    std::fs::create_dir_all(&custom_line)?;
-    let scan_dirs = std::env::join_paths([&custom, &custom_line])?;
     let env = vec![
-        (OsString::from("PHP_INI_SCAN_DIR"), scan_dirs),
+        (OsString::from("PHP_INI_SCAN_DIR"), scan_dirs(layout, &installed)?),
         (OsString::from("PHP_FCGI_MAX_REQUESTS"), OsString::from(MAX_REQUESTS)),
     ];
     let log = layout.logs().join(format!("php-{version}.log"));
@@ -177,6 +220,13 @@ struct IniContext {
 }
 
 /// Development-friendly defaults; anything in `[php.ini]` wins.
+///
+/// The OPcache and realpath settings come from measuring slow Laragon
+/// setups (PRD §8.7): without OPcache every request recompiles every file,
+/// and Windows file lookups are slow, so both caches are sized for large
+/// Laravel/WordPress projects. `opcache.file_cache` (set in `render_ini`)
+/// keeps compiled scripts on disk so the first request after a reboot does
+/// not start cold.
 const DEFAULT_SETTINGS: &[(&str, &str)] = &[
     ("display_errors", "On"),
     ("display_startup_errors", "On"),
@@ -189,8 +239,13 @@ const DEFAULT_SETTINGS: &[(&str, &str)] = &[
     ("max_input_vars", "5000"),
     ("date.timezone", "UTC"),
     ("realpath_cache_size", "4096K"),
+    ("realpath_cache_ttl", "600"),
     ("opcache.enable", "1"),
     ("opcache.enable_cli", "0"),
+    ("opcache.memory_consumption", "256"),
+    ("opcache.interned_strings_buffer", "32"),
+    ("opcache.max_accelerated_files", "50000"),
+    // Edits show up on the next request: timestamps are checked every time.
     ("opcache.validate_timestamps", "1"),
     ("opcache.revalidate_freq", "0"),
 ];
@@ -209,6 +264,21 @@ fn render_ini(layout: &Layout, config: &Config, installed: &Installed) -> Result
 
     let mut settings: BTreeMap<String, String> =
         DEFAULT_SETTINGS.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
+    // Send mail() to Mailpit when it is installed (PRD F22).
+    if let Some(mailpit) = super::select(layout, Kind::Mailpit, None) {
+        let smtp = config.port("mailpit", super::mailpit::SMTP_PORT);
+        if os() == Os::Windows {
+            settings.insert("SMTP".into(), "127.0.0.1".into());
+            settings.insert("smtp_port".into(), smtp.to_string());
+        } else {
+            let exe = mailpit.exe("mailpit").display().to_string();
+            settings.insert("sendmail_path".into(), format!("\"{exe} sendmail -S 127.0.0.1:{smtp}\""));
+        }
+    }
+    let opcache_dir = layout.data().join("php").join("opcache").join(installed.version.line());
+    std::fs::create_dir_all(&opcache_dir)?;
+    let opcache_path = opcache_dir.display().to_string().replace('\\', "/");
+    settings.insert("opcache.file_cache".into(), format!("\"{opcache_path}\""));
     settings.extend(config.php.ini.clone());
 
     let session_dir = layout.data().join("php").join("sessions");
@@ -228,4 +298,19 @@ fn render_ini(layout: &Layout, config: &Config, installed: &Installed) -> Result
         settings: settings.into_iter().collect(),
     };
     template::render("php/php.ini", ctx)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ports_are_fixed_per_line() {
+        let port = |v: &str| base_port(&v.parse().unwrap()).unwrap();
+        assert_eq!(port("7.4.33"), 19240);
+        assert_eq!(port("8.4.27"), 19340);
+        assert_eq!(port("8.4.1"), 19340);
+        assert_eq!(port("8.5.0"), 19350);
+        assert!(port("13.9.0") < 19900);
+    }
 }

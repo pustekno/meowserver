@@ -6,6 +6,7 @@
 //! (PRD F6–F12). Project folders are only read, never modified.
 
 mod detect;
+pub mod manage;
 
 use std::path::{Path, PathBuf};
 

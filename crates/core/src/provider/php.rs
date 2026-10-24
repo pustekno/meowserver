@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use anyhow::Result;
 use serde::Deserialize;
 
-use super::{Archive, Asset, Provider, Release, sort_newest_first};
+use super::{Archive, Asset, Provider, Release, latest_per_line, sort_newest_first};
 use crate::http::Http;
 use crate::platform::{Arch, Os, arch, os};
 use crate::version::Version;
@@ -48,9 +48,8 @@ fn windows_release(entry: &serde_json::Value) -> Option<Release> {
     Some(Release {
         version,
         assets: vec![Asset {
-            url: format!("{WINDOWS_BASE}{}", zip.get("path")?.as_str()?),
             sha256: zip.get("sha256").and_then(|s| s.as_str()).map(str::to_owned),
-            archive: Archive::Zip,
+            ..Asset::new(format!("{WINDOWS_BASE}{}", zip.get("path")?.as_str()?), Archive::Zip)
         }],
     })
 }
@@ -84,16 +83,11 @@ impl Provider for StaticPhp {
                 continue;
             }
             let Ok(parsed) = version.parse::<Version>() else { continue };
-            let asset = |file: &str| Asset {
-                url: format!("{STATIC_BASE}{file}"),
-                sha256: None,
-                archive: Archive::TarGz,
-            };
+            let asset = |file: &str| Asset::new(format!("{STATIC_BASE}{file}"), Archive::TarGz);
             out.push(Release { version: parsed, assets: vec![asset(name), asset(&cli)] });
         }
-        sort_newest_first(&mut out);
         // Keep the latest patch of each minor version, like php.net does.
-        out.dedup_by(|b, a| a.version.line() == b.version.line());
+        latest_per_line(&mut out);
         Ok(out)
     }
 }

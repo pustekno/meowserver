@@ -1274,6 +1274,7 @@ dependencies = [
  "anyhow",
  "clap",
  "meow-core",
+ "serde",
  "serde_json",
 ]
 

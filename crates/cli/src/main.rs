@@ -2,24 +2,22 @@
 // Copyright (C) 2026 PT Pusat Teknologi Nusantara and PT Puskomedia Indonesia Kreatif
 // Additional terms under GPLv3 section 7(b) apply; see NOTICE.
 
-//! `meow`, the MeowServer command line (PRD §13).
+//! `meow`, the MeowServer command line (PRD §13). Every command calls into
+//! `meow_core`; nothing here decides how services work.
 
-use std::io::Write;
-use std::process::{Command, ExitCode, Stdio};
-use std::time::{Duration, Instant};
+mod daemon;
+mod print;
+mod sites;
+mod system;
+mod versions;
 
-use anyhow::{Context, Result, bail};
+use std::path::PathBuf;
+use std::process::ExitCode;
+
+use anyhow::Result;
 use clap::{Parser, Subcommand};
-use meow_core::config::Config;
-use meow_core::download::{self, Progress};
-use meow_core::engine::Status;
-use meow_core::http::Http;
-use meow_core::ipc::{Client, Request};
+use meow_core::ipc::Request;
 use meow_core::layout::Layout;
-use meow_core::provider;
-use meow_core::service::{self, Kind};
-use meow_core::site;
-use meow_core::supervisor::State;
 
 #[derive(Parser)]
 #[command(name = "meow", version, about = "MeowServer: a lightweight local web development environment")]
@@ -33,7 +31,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Cmd {
-    /// Start MeowServer and the services listed in `general.autostart`.
+    /// Start MeowServer and the services in `general.autostart`.
     Up {
         /// Run without a tray icon.
         #[arg(long)]
@@ -43,12 +41,17 @@ enum Cmd {
     Down,
     /// Stop all services and exit MeowServer.
     Quit,
+    /// Start one service: web, php, mysql, mariadb, postgres, redis, mailpit.
+    Start { service: String },
+    /// Stop one service.
+    Stop { service: String },
+    /// Restart one service.
+    Restart { service: String },
     /// Re-read meow.toml and project folders, then apply the changes.
     Reload,
     /// Show services and sites.
     Status,
-    /// List all sites.
-    Sites,
+
     /// List installed versions of a service, or downloadable ones.
     List {
         service: String,
@@ -61,8 +64,84 @@ enum Cmd {
         /// A version or prefix such as `8.4`. Defaults to the newest.
         version: Option<String>,
     },
-    /// Set the active version of a service, e.g. `meow use php 8.3`.
+    /// Remove an installed version.
+    Uninstall { service: String, version: String },
+    /// Set the active version (`meow use php 8.3`) or web server (`meow use web nginx`).
     Use { service: String, version: String },
+
+    /// List all sites.
+    Sites,
+    /// Serve a folder from anywhere as a site.
+    Link {
+        path: PathBuf,
+        #[arg(long)]
+        name: Option<String>,
+    },
+    /// Stop serving a site added with `link` or `--proxy`. The folder is kept.
+    Unlink { name: String },
+    /// Serve every subfolder of a folder as a site.
+    Park { dir: PathBuf },
+    /// Stop serving a parked folder.
+    Unpark { dir: PathBuf },
+    /// Change one site's settings.
+    Site {
+        name: String,
+        /// PHP version for this site, or `default`.
+        #[arg(long)]
+        php: Option<String>,
+        /// Forward to a port, a URL, or `auto` (picks a free port) instead of serving files.
+        #[arg(long)]
+        proxy: Option<String>,
+        /// Document root relative to the project folder, or `auto`.
+        #[arg(long)]
+        root: Option<String>,
+    },
+
+    /// Open a shell with PATH and php.ini set to the active versions.
+    Shell,
+    /// Run one command with MeowServer's PATH and php.ini, e.g. `meow run -- composer install`.
+    Run {
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true, required = true)]
+        command: Vec<String>,
+    },
+    /// Show a service's log.
+    Logs {
+        service: String,
+        /// Keep printing new lines.
+        #[arg(short, long)]
+        follow: bool,
+        #[arg(short = 'n', long, default_value_t = 50)]
+        lines: usize,
+    },
+    /// Check for problems and suggest fixes.
+    Doctor,
+    /// Manage hosts file entries.
+    Hosts {
+        #[command(subcommand)]
+        action: system::HostsAction,
+    },
+    /// Exclude MeowServer and project folders from Microsoft Defender scanning.
+    Defender {
+        #[command(subcommand)]
+        action: system::DefenderAction,
+    },
+    /// Import projects and databases from another tool.
+    Import {
+        #[command(subcommand)]
+        from: system::ImportFrom,
+    },
+    /// Prepare a problem report for MeowServer's developers.
+    Report {
+        /// Open the pre-filled GitHub issue in the browser.
+        #[arg(long)]
+        open: bool,
+    },
+    /// Steps that need administrator rights; started by MeowServer itself.
+    #[command(hide = true)]
+    Privileged {
+        #[command(subcommand)]
+        action: system::Privileged,
+    },
 }
 
 fn main() -> ExitCode {
@@ -77,206 +156,48 @@ fn main() -> ExitCode {
 }
 
 fn run(cli: Cli) -> Result<()> {
-    let layout = Layout::discover()?;
     let json = cli.json;
+    // The elevated helper gets its folder explicitly: elevation does not
+    // pass the environment along.
+    if let Cmd::Privileged { action } = cli.command {
+        return system::privileged(action);
+    }
+    let layout = Layout::discover()?;
     match cli.command {
         Cmd::Up { headless } => {
-            let mut client = ensure_daemon(&layout, headless)?;
-            client.call(Request::StartAll)?;
-            print_status(&client.call(Request::Status)?, json)
+            let mut client = daemon::ensure(&layout, headless)?;
+            let started = client.call(Request::StartAll);
+            print::status(&client.call(Request::Status)?, json)?;
+            started.map(drop)
         }
-        Cmd::Down => call(&layout, Request::StopAll).map(drop),
-        Cmd::Quit => match Client::connect(&layout) {
-            Ok(mut client) => client.call(Request::Shutdown).map(drop),
-            Err(_) => Ok(()),
-        },
-        Cmd::Reload => call(&layout, Request::Reload).map(drop),
-        Cmd::Status => match Client::connect(&layout) {
-            Ok(mut client) => print_status(&client.call(Request::Status)?, json),
-            Err(_) => {
-                println!("MeowServer is not running. Start it with `meow up`.");
-                Ok(())
-            }
-        },
-        Cmd::Sites => {
-            let config = Config::load(&layout)?;
-            let discovery = site::discover(&layout, &config);
-            if json {
-                println!("{}", serde_json::to_string_pretty(&discovery)?);
-            } else {
-                print_sites(&discovery.sites, &discovery.warnings);
-            }
-            Ok(())
-        }
-        Cmd::List { service, available } => list(&layout, &service, available, json),
-        Cmd::Install { service, version } => install(&layout, &service, version.as_deref()),
-        Cmd::Use { service, version } => use_version(&layout, &service, &version),
-    }
-}
+        Cmd::Down => daemon::call(&layout, Request::StopAll).map(drop),
+        Cmd::Quit => daemon::quit(&layout),
+        Cmd::Start { service } => daemon::call(&layout, Request::Start { unit: service }).map(drop),
+        Cmd::Stop { service } => daemon::call(&layout, Request::Stop { unit: service }).map(drop),
+        Cmd::Restart { service } => daemon::call(&layout, Request::Restart { unit: service }).map(drop),
+        Cmd::Reload => daemon::call(&layout, Request::Reload).map(drop),
+        Cmd::Status => daemon::status(&layout, json),
 
-fn call(layout: &Layout, request: Request) -> Result<serde_json::Value> {
-    Client::connect(layout)?.call(request)
-}
+        Cmd::List { service, available } => versions::list(&layout, &service, available, json),
+        Cmd::Install { service, version } => versions::install(&layout, &service, version.as_deref()),
+        Cmd::Uninstall { service, version } => versions::uninstall(&layout, &service, &version),
+        Cmd::Use { service, version } => versions::use_version(&layout, &service, &version),
 
-/// Connects to `meowd`, starting it first if needed.
-fn ensure_daemon(layout: &Layout, headless: bool) -> Result<Client> {
-    if let Ok(client) = Client::connect(layout) {
-        return Ok(client);
-    }
-    let exe = std::env::current_exe()?;
-    let meowd = exe.with_file_name(format!("meowd{}", std::env::consts::EXE_SUFFIX));
-    let mut cmd = Command::new(&meowd);
-    if headless {
-        cmd.arg("--headless");
-    }
-    cmd.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
-    meow_core::platform::spawn_detached(&mut cmd)
-        .with_context(|| format!("cannot start {}", meowd.display()))?;
-    let deadline = Instant::now() + Duration::from_secs(10);
-    loop {
-        if let Ok(client) = Client::connect(layout) {
-            return Ok(client);
-        }
-        if Instant::now() > deadline {
-            bail!("MeowServer did not start; see {}", layout.logs().join("meowd.log").display());
-        }
-        std::thread::sleep(Duration::from_millis(100));
-    }
-}
+        Cmd::Sites => sites::list(&layout, json),
+        Cmd::Link { path, name } => sites::link(&layout, &path, name.as_deref()),
+        Cmd::Unlink { name } => sites::unlink(&layout, &name),
+        Cmd::Park { dir } => sites::park(&layout, &dir),
+        Cmd::Unpark { dir } => sites::unpark(&layout, &dir),
+        Cmd::Site { name, php, proxy, root } => sites::configure(&layout, &name, php, proxy, root),
 
-fn parse_kind(service: &str) -> Result<Kind> {
-    Kind::from_id(service).with_context(|| {
-        let known: Vec<&str> = Kind::ALL.iter().map(|k| k.id()).collect();
-        format!("unknown service {service:?}; known services: {}", known.join(", "))
-    })
-}
-
-fn list(layout: &Layout, service: &str, available: bool, json: bool) -> Result<()> {
-    let kind = parse_kind(service)?;
-    if available {
-        let provider = provider::for_service(kind)
-            .with_context(|| format!("{service} cannot be downloaded on this platform yet"))?;
-        let releases = provider.releases(&Http::new())?;
-        if json {
-            println!("{}", serde_json::to_string_pretty(&releases)?);
-            return Ok(());
-        }
-        let installed = service::installed(layout, kind);
-        for rel in releases {
-            let mark = if installed.iter().any(|i| i.version == rel.version) { "  (installed)" } else { "" };
-            let checksum =
-                if rel.assets.iter().all(|a| a.sha256.is_some()) { "" } else { "  [no official checksum]" };
-            println!("{}{mark}{checksum}", rel.version);
-        }
-        return Ok(());
-    }
-    let installed = service::installed(layout, kind);
-    if json {
-        println!("{}", serde_json::to_string_pretty(&installed)?);
-        return Ok(());
-    }
-    if installed.is_empty() {
-        println!("No {service} versions installed. See `meow list {service} --available`.");
-    }
-    let config = Config::load(layout)?;
-    let active = service::select(layout, kind, config.version_selector(kind.id())).map(|i| i.version);
-    for i in installed {
-        let mark = if Some(&i.version) == active.as_ref() { "  (active)" } else { "" };
-        println!("{}{mark}", i.version);
-    }
-    Ok(())
-}
-
-fn install(layout: &Layout, service: &str, selector: Option<&str>) -> Result<()> {
-    let kind = parse_kind(service)?;
-    let provider = provider::for_service(kind)
-        .with_context(|| format!("{service} cannot be downloaded on this platform yet"))?;
-    let http = Http::new();
-    let releases = provider.releases(&http)?;
-    let release = releases
-        .iter()
-        .find(|r| selector.is_none_or(|s| r.version.matches(s)))
-        .with_context(|| format!("no {service} release matches {:?}", selector.unwrap_or("latest")))?;
-    layout.ensure()?;
-
-    let mut on_asset = |asset: &provider::Asset| {
-        println!("Downloading {}", asset.url);
-        if asset.sha256.is_none() {
-            println!("  note: upstream publishes no checksum for this file");
-        }
-    };
-    let mut last = Instant::now();
-    let mut on_bytes = |got: u64, total: Option<u64>| {
-        if last.elapsed() < Duration::from_millis(200) {
-            return;
-        }
-        last = Instant::now();
-        match total {
-            Some(t) if t > 0 => print!("\r  {:>3}%  {:.1} MB", got * 100 / t, got as f64 / 1e6),
-            _ => print!("\r  {:.1} MB", got as f64 / 1e6),
-        }
-        let _ = std::io::stdout().flush();
-    };
-    let dir = download::install(
-        layout,
-        &http,
-        kind.id(),
-        release,
-        Progress { on_asset: &mut on_asset, on_bytes: &mut on_bytes },
-    )?;
-    println!("\rInstalled {service} {} in {}", release.version, dir.display());
-    Ok(())
-}
-
-fn use_version(layout: &Layout, service: &str, selector: &str) -> Result<()> {
-    let kind = parse_kind(service)?;
-    let Some(found) = service::select(layout, kind, Some(selector)) else {
-        bail!("{service} {selector} is not installed. Run `meow install {service} {selector}`.");
-    };
-    let mut config = Config::load(layout)?;
-    config.versions.insert(kind.id().to_owned(), selector.to_owned());
-    config.save(layout)?;
-    println!("{service} {selector} is now active ({}).", found.version);
-    if let Ok(mut client) = Client::connect(layout) {
-        client.call(Request::Reload)?;
-    }
-    Ok(())
-}
-
-fn print_status(value: &serde_json::Value, json: bool) -> Result<()> {
-    if json {
-        println!("{}", serde_json::to_string_pretty(value)?);
-        return Ok(());
-    }
-    let status: Status = serde_json::from_value(value.clone())?;
-    if status.processes.is_empty() {
-        println!("No services running.");
-    }
-    for p in &status.processes {
-        let state = match &p.state {
-            State::Starting => "starting".to_owned(),
-            State::Running { pid } => format!("running (pid {pid})"),
-            State::Stopped => "stopped".to_owned(),
-            State::Failed { reason } => format!("FAILED: {reason}"),
-        };
-        let restarts = if p.restarts > 0 { format!(", {} restarts", p.restarts) } else { String::new() };
-        println!("{:<14} {state}{restarts}", p.id);
-    }
-    println!();
-    print_sites(&status.sites, &status.warnings);
-    Ok(())
-}
-
-fn print_sites(sites: &[site::Site], warnings: &[String]) {
-    if sites.is_empty() {
-        println!("No sites yet. Add a folder to www/.");
-    }
-    for s in sites {
-        let target = s.proxy.clone().unwrap_or_else(|| s.docroot.display().to_string());
-        let php = s.php.as_deref().map(|v| format!("  php {v}")).unwrap_or_default();
-        println!("http://{:<30} {target}{php}", s.host);
-    }
-    for w in warnings {
-        println!("warning: {w}");
+        Cmd::Shell => system::shell(&layout),
+        Cmd::Run { command } => system::run_command(&layout, &command),
+        Cmd::Logs { service, follow, lines } => system::logs(&layout, &service, follow, lines),
+        Cmd::Doctor => system::doctor(&layout, json),
+        Cmd::Hosts { action } => system::hosts(&layout, action),
+        Cmd::Defender { action } => system::defender(&layout, action),
+        Cmd::Import { from } => system::import(&layout, from),
+        Cmd::Report { open } => system::report(&layout, open),
+        Cmd::Privileged { .. } => unreachable!(),
     }
 }

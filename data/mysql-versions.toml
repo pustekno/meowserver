@@ -1,0 +1,17 @@
+# MySQL versions offered for download on Windows.
+#
+# Oracle publishes no download API, so this is the only hand-curated version
+# list in MeowServer (PRD §9.5). Keep the newest patch of each supported line;
+# the URL is https://cdn.mysql.com/Downloads/MySQL-<line>/mysql-<version>-winx64.zip
+# and must answer 200 before a version is added here.
+#
+# Last checked: 2026-10-25.
+
+[[release]]
+version = "9.7.4"
+
+[[release]]
+version = "8.4.13"
+
+[[release]]
+version = "8.0.46"

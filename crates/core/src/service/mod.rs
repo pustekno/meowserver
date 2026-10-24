@@ -4,12 +4,20 @@
 
 //! Managed services and the versions installed for each (PRD §5.1).
 
+pub mod apache;
 pub mod caddy;
+pub mod datadir;
+pub mod mailpit;
+pub mod mysql;
+pub mod nginx;
 pub mod php;
+pub mod postgres;
+pub mod redis;
+pub mod web;
 
 use std::path::{Path, PathBuf};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::layout::Layout;
 use crate::version::{self, Version};
@@ -63,6 +71,57 @@ impl Kind {
 
     pub fn from_id(id: &str) -> Option<Kind> {
         Kind::ALL.into_iter().find(|k| k.id() == id)
+    }
+}
+
+/// What users start and stop: `general.autostart`, `meow start <unit>`.
+/// "web" is whichever web server is configured; "php" is every PHP pool in
+/// use.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Unit {
+    Mysql,
+    Mariadb,
+    Postgres,
+    Redis,
+    Mailpit,
+    Php,
+    Web,
+}
+
+impl Unit {
+    /// In start order: databases first, the web server last.
+    pub const ALL: [Unit; 7] =
+        [Unit::Mysql, Unit::Mariadb, Unit::Postgres, Unit::Redis, Unit::Mailpit, Unit::Php, Unit::Web];
+
+    pub fn id(self) -> &'static str {
+        match self {
+            Unit::Mysql => "mysql",
+            Unit::Mariadb => "mariadb",
+            Unit::Postgres => "postgres",
+            Unit::Redis => "redis",
+            Unit::Mailpit => "mailpit",
+            Unit::Php => "php",
+            Unit::Web => "web",
+        }
+    }
+
+    /// Also accepts web server names and `postgresql`.
+    pub fn parse(name: &str) -> Option<Unit> {
+        match name {
+            "caddy" | "nginx" | "apache" | "httpd" => Some(Unit::Web),
+            "postgresql" | "pgsql" => Some(Unit::Postgres),
+            _ => Unit::ALL.into_iter().find(|u| u.id() == name),
+        }
+    }
+
+    /// The process ids that belong to this unit.
+    pub fn owns(self, process_id: &str) -> bool {
+        match self {
+            Unit::Web => matches!(process_id, "caddy" | "nginx" | "apache"),
+            Unit::Php => process_id.starts_with("php-"),
+            other => process_id == other.id(),
+        }
     }
 }
 

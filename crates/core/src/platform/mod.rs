@@ -41,6 +41,34 @@ pub fn spawn_detached(cmd: &mut Command) -> std::io::Result<Child> {
     imp::spawn_detached(cmd)
 }
 
+/// Spawns a console program in a new console window (Windows), or
+/// detached elsewhere.
+pub fn spawn_console(cmd: &mut Command) -> std::io::Result<Child> {
+    imp::spawn_console(cmd)
+}
+
+/// Every process listening on a TCP port, as (pid, executable). All
+/// addresses count: on Windows a program bound to 127.0.0.1 silently wins
+/// over one bound to 0.0.0.0 on the same port, so one owner is not enough.
+pub fn port_owners(port: u16) -> Vec<(u32, String)> {
+    imp::listener_pids(port)
+        .into_iter()
+        .map(|pid| (pid, imp::process_path(pid).unwrap_or_else(|| format!("pid {pid}"))))
+        .collect()
+}
+
+/// True if a process with this executable file name is running
+/// (case-insensitive, e.g. `laragon.exe`).
+pub fn is_running(exe_name: &str) -> bool {
+    imp::process_names().iter().any(|(_, n)| n.eq_ignore_ascii_case(exe_name))
+}
+
+/// Runs a command with administrator rights after the OS prompt (UAC or a
+/// password dialog) and returns its exit code. Fails if the user declines.
+pub fn run_elevated(program: &std::path::Path, args: &[String]) -> std::io::Result<i32> {
+    imp::run_elevated(program, args)
+}
+
 /// Opens a folder or URL with the desktop's default handler.
 pub fn open(target: &std::ffi::OsStr) -> std::io::Result<()> {
     let program = match os() {

@@ -9,8 +9,11 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod icon;
+mod tray;
 
+use std::process::Command;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 
 use anyhow::Result;
@@ -18,15 +21,16 @@ use meow_core::config::Config;
 use meow_core::engine::Engine;
 use meow_core::ipc::{self, Request, Response};
 use meow_core::layout::Layout;
-use meow_core::{logging, platform, supervisor};
-use tao::event::Event;
+use meow_core::{hosts, logging, platform, report, supervisor, terminal, watch};
+use tao::event::{Event, StartCause};
 use tao::event_loop::{ControlFlow, EventLoopBuilder, EventLoopProxy};
-use tray_icon::menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem};
-use tray_icon::{TrayIcon, TrayIconBuilder};
+use tray_icon::menu::MenuEvent;
+
+use tray::{Action, Tray};
 
 enum UserEvent {
     Menu(MenuEvent),
-    ServiceChanged,
+    Changed,
     Message(String),
     Shutdown,
 }
@@ -44,6 +48,7 @@ fn run() -> Result<()> {
     let layout = Layout::discover()?;
     layout.ensure()?;
     logging::init(&layout.logs().join("meowd.log"), cfg!(debug_assertions) || headless)?;
+    report::install_panic_hook(&layout);
     log::info!("meowd {} starting in {}", meow_core::VERSION, layout.root().display());
 
     let (events_tx, events_rx) = mpsc::channel::<supervisor::Event>();
@@ -63,29 +68,35 @@ fn run() -> Result<()> {
         }
     })?;
 
-    // Service state changes repaint the tray.
     let forward = proxy.clone();
     std::thread::spawn(move || {
         for _ in events_rx {
-            if forward.send_event(UserEvent::ServiceChanged).is_err() {
+            if forward.send_event(UserEvent::Changed).is_err() {
                 break;
             }
         }
     });
+
+    let on_change = {
+        let (engine, proxy) = (engine.clone(), proxy.clone());
+        move || after_change(&engine, &proxy, |engine| engine.reload())
+    };
+    watch::spawn(layout.clone(), on_change);
 
     let menu_proxy = proxy.clone();
     MenuEvent::set_event_handler(Some(move |e| {
         let _ = menu_proxy.send_event(UserEvent::Menu(e));
     }));
 
+    let crashed = report::unreported_crash(&layout).is_some();
     let mut tray: Option<Tray> = None;
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Wait;
         match event {
-            Event::NewEvents(tao::event::StartCause::Init) => match Tray::new() {
+            Event::NewEvents(StartCause::Init) => match Tray::new(&engine, crashed) {
                 Ok(t) => {
                     tray = Some(t);
-                    autostart(&engine, &proxy);
+                    after_change(&engine, &proxy, |engine| engine.start_all());
                 }
                 Err(e) => {
                     log::error!("cannot create the tray icon: {e:#}");
@@ -93,34 +104,28 @@ fn run() -> Result<()> {
                 }
             },
             Event::UserEvent(UserEvent::Menu(e)) => {
-                let Some(t) = &tray else { return };
-                if e.id == t.start_all.id() {
-                    in_background(&engine, &proxy, |engine| engine.start_all());
-                } else if e.id == t.stop_all.id() {
-                    in_background(&engine, &proxy, |engine| {
-                        engine.stop_all();
-                        Ok(())
-                    });
-                } else if e.id == t.open_www.id() {
-                    let config = Config::load(engine.layout()).unwrap_or_default();
-                    let www = engine.layout().resolve(&config.general.www);
-                    let _ = std::fs::create_dir_all(&www);
-                    let _ = platform::open(www.as_os_str());
-                } else if e.id == t.open_logs.id() {
-                    let _ = platform::open(engine.layout().logs().as_os_str());
-                } else if e.id == t.quit.id() {
+                let Some(action) = Action::parse(&e.id) else { return };
+                if let Some(t) = &mut tray {
+                    t.clear_message();
+                }
+                if matches!(action, Action::Report) {
+                    if let Some(t) = &mut tray {
+                        t.crash_notice = false;
+                    }
+                }
+                if handle(action, &engine, &proxy) {
                     shut_down(&engine);
                     *control_flow = ControlFlow::Exit;
                 }
             }
-            Event::UserEvent(UserEvent::ServiceChanged) => {
+            Event::UserEvent(UserEvent::Changed) => {
                 if let Some(t) = &tray {
                     t.refresh(&engine);
                 }
             }
             Event::UserEvent(UserEvent::Message(text)) => {
-                if let Some(t) = &tray {
-                    t.show_message(&text);
+                if let Some(t) = &mut tray {
+                    t.show_message(&engine, &text);
                 }
             }
             Event::UserEvent(UserEvent::Shutdown) => {
@@ -130,6 +135,63 @@ fn run() -> Result<()> {
             _ => {}
         }
     });
+}
+
+/// Runs a tray action. Returns true when MeowServer should quit.
+fn handle(action: Action, engine: &Arc<Engine>, proxy: &EventLoopProxy<UserEvent>) -> bool {
+    let layout = engine.layout();
+    let config = || Config::load(layout).unwrap_or_default();
+    let report_err = |r: Result<()>| {
+        if let Err(e) = r {
+            log::error!("{e:#}");
+            let _ = proxy.send_event(UserEvent::Message(format!("{e:#}")));
+        }
+    };
+    match action {
+        Action::StartAll => after_change(engine, proxy, |e| e.start_all()),
+        Action::StopAll => after_change(engine, proxy, |e| {
+            e.stop_all();
+            Ok(())
+        }),
+        Action::OpenApp => report_err(Command::new(tray::gui_exe()).spawn().map(drop).map_err(Into::into)),
+        Action::OpenUrl(url) => report_err(platform::open(url.as_ref()).map_err(Into::into)),
+        Action::UseWeb(server) => {
+            let mut c = config();
+            c.general.web_server = server;
+            report_err(c.save(layout));
+            after_change(engine, proxy, |e| e.reload());
+        }
+        Action::UsePhp(line) => {
+            let mut c = config();
+            c.versions.insert("php".into(), line);
+            report_err(c.save(layout));
+            after_change(engine, proxy, |e| e.reload());
+        }
+        Action::Toggle(unit) => {
+            if engine.running_units().contains(&unit) {
+                after_change(engine, proxy, move |e| {
+                    e.stop(unit);
+                    Ok(())
+                });
+            } else {
+                after_change(engine, proxy, move |e| e.start(&[unit]));
+            }
+        }
+        Action::OpenWww => {
+            let www = layout.resolve(&config().general.www);
+            let _ = std::fs::create_dir_all(&www);
+            report_err(platform::open(www.as_os_str()).map_err(Into::into));
+        }
+        Action::Terminal => report_err(terminal::open(layout, &config(), None)),
+        Action::OpenLogs => report_err(platform::open(layout.logs().as_os_str()).map_err(Into::into)),
+        Action::Report => {
+            let url = report::issue_url("Problem report", &report::build(layout));
+            report_err(platform::open(url.as_ref()).map_err(Into::into));
+            report::acknowledge(layout);
+        }
+        Action::Quit => return true,
+    }
+    false
 }
 
 fn run_headless(
@@ -142,6 +204,12 @@ fn run_headless(
         let _ = quit_tx.send(());
     })?;
     std::thread::spawn(move || for _ in events_rx {});
+    let watched = engine.clone();
+    watch::spawn(layout.clone(), move || {
+        if let Err(e) = watched.reload() {
+            log::error!("reload: {e:#}");
+        }
+    });
     if let Err(e) = engine.start_all() {
         log::error!("start: {e:#}");
     }
@@ -150,13 +218,14 @@ fn run_headless(
     Ok(())
 }
 
-/// `on_shutdown` runs after the reply to a `Shutdown` request is decided;
-/// the actual stop happens on the main thread.
+/// `on_shutdown` runs when a client asks MeowServer to quit; the stop
+/// itself happens on the main thread.
 fn serve_ipc(
     layout: &Layout,
     engine: Arc<Engine>,
     on_shutdown: impl Fn() + Send + Sync + 'static,
 ) -> Result<()> {
+    let proxy_engine = engine.clone();
     ipc::serve(
         layout,
         Arc::new(move |request| match request {
@@ -164,17 +233,19 @@ fn serve_ipc(
                 on_shutdown();
                 Response::ok(())
             }
-            other => engine.handle(other),
+            other => {
+                let response = proxy_engine.handle(other);
+                let engine = proxy_engine.clone();
+                std::thread::spawn(move || sync_hosts(&engine));
+                response
+            }
         }),
     )
 }
 
-fn autostart(engine: &Arc<Engine>, proxy: &EventLoopProxy<UserEvent>) {
-    in_background(engine, proxy, |engine| engine.start_all());
-}
-
-/// Runs a slow engine call off the UI thread and reports failures in the tray.
-fn in_background(
+/// Runs a slow engine call off the UI thread, reports failures in the tray,
+/// then brings the hosts file and the menu up to date.
+fn after_change(
     engine: &Arc<Engine>,
     proxy: &EventLoopProxy<UserEvent>,
     f: impl FnOnce(&Engine) -> Result<()> + Send + 'static,
@@ -186,80 +257,36 @@ fn in_background(
             log::error!("{e:#}");
             let _ = proxy.send_event(UserEvent::Message(format!("{e:#}")));
         }
-        let _ = proxy.send_event(UserEvent::ServiceChanged);
+        let _ = proxy.send_event(UserEvent::Changed);
+        sync_hosts(&engine);
     });
+}
+
+/// Keeps hosts entries in step with the sites (PRD F16). At most one
+/// elevation prompt at a time; declining is fine.
+fn sync_hosts(engine: &Engine) {
+    static BUSY: AtomicBool = AtomicBool::new(false);
+    let layout = engine.layout();
+    let config = Config::load(layout).unwrap_or_default();
+    if !config.general.manage_hosts || hosts::is_current(layout, &config) {
+        return;
+    }
+    if BUSY.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    let meow = std::env::current_exe()
+        .unwrap_or_default()
+        .with_file_name(format!("meow{}", std::env::consts::EXE_SUFFIX));
+    match hosts::sync(layout, &config, &meow) {
+        Ok(hosts::Sync::Declined) => log::info!("hosts update declined by the user"),
+        Ok(_) => {}
+        Err(e) => log::warn!("hosts update failed: {e:#}"),
+    }
+    BUSY.store(false, Ordering::SeqCst);
 }
 
 fn shut_down(engine: &Engine) {
     log::info!("stopping all services");
     engine.stop_all();
     log::info!("meowd exiting");
-}
-
-struct Tray {
-    icon: TrayIcon,
-    status: MenuItem,
-    start_all: MenuItem,
-    stop_all: MenuItem,
-    open_www: MenuItem,
-    open_logs: MenuItem,
-    quit: MenuItem,
-}
-
-impl Tray {
-    fn new() -> Result<Self> {
-        let status = MenuItem::new("MeowServer — stopped", false, None);
-        let start_all = MenuItem::new("Start All", true, None);
-        let stop_all = MenuItem::new("Stop All", true, None);
-        let open_www = MenuItem::new("Open www folder", true, None);
-        let open_logs = MenuItem::new("Open logs folder", true, None);
-        let quit = MenuItem::new("Quit (stops all services)", true, None);
-        let menu = Menu::new();
-        menu.append_items(&[
-            &status,
-            &PredefinedMenuItem::separator(),
-            &start_all,
-            &stop_all,
-            &PredefinedMenuItem::separator(),
-            &open_www,
-            &open_logs,
-            &PredefinedMenuItem::separator(),
-            &quit,
-        ])?;
-        let icon = TrayIconBuilder::new()
-            .with_menu(Box::new(menu))
-            .with_tooltip("MeowServer")
-            .with_icon(icon::stopped())
-            .build()?;
-        Ok(Self { icon, status, start_all, stop_all, open_www, open_logs, quit })
-    }
-
-    fn refresh(&self, engine: &Engine) {
-        let processes = engine.status().processes;
-        let running: Vec<String> = processes
-            .iter()
-            .filter(|p| matches!(p.state, supervisor::State::Running { .. }))
-            .map(|p| p.id.split('#').next().unwrap_or(&p.id).to_owned())
-            .fold(Vec::new(), |mut acc, id| {
-                if !acc.contains(&id) {
-                    acc.push(id);
-                }
-                acc
-            });
-        let failed = processes.iter().any(|p| matches!(p.state, supervisor::State::Failed { .. }));
-        let text = match (running.is_empty(), failed) {
-            (_, true) => "MeowServer — a service failed (see logs)".to_owned(),
-            (true, false) => "MeowServer — stopped".to_owned(),
-            (false, false) => format!("MeowServer — running ({})", running.join(", ")),
-        };
-        self.status.set_text(&text);
-        let _ = self.icon.set_tooltip(Some(&text));
-        let _ = self.icon.set_icon(Some(if running.is_empty() { icon::stopped() } else { icon::running() }));
-    }
-
-    fn show_message(&self, text: &str) {
-        let short: String = text.chars().take(120).collect();
-        self.status.set_text(format!("Error: {short}"));
-        let _ = self.icon.set_tooltip(Some(format!("MeowServer — {short}")));
-    }
 }

@@ -347,6 +347,25 @@ but never part of a report.
 *Done when:* a forced panic in `meowd` leads, after restart, to a pre-filled
 issue page containing the panic message.
 
+**F39 — Defender exclusions (Windows).** Microsoft Defender scans every
+file PHP opens on first use after a reboot, which can make the first page
+of a Laravel or WordPress site take many seconds (§8.7). `meow defender
+exclude` and a Settings button add exclusions for the MeowServer folder and
+every project folder after one elevation prompt; `meow doctor` suggests it
+when real-time protection is on; F36 removes them. Dev Drive is suggested as
+an alternative. Opt-in, never automatic.
+*Done when:* after excluding, the first request to a Laravel site after a
+reboot is within 2× of a warm request.
+
+**F40 — Ports for dev servers.** Every site shares ports 80/443 and is told
+apart by name, so `artisan serve`, `spark serve`, and similar are not needed
+and never compete for port 80. For projects that run their own dev server
+(Vite, Next, Nuxt), `meow site <name> --proxy auto` picks a free port in
+3000–3999 that no other site claims, maps `<name>.localhost` to it, and tells
+the user which port to start the dev server on.
+*Done when:* three projects with their own dev servers run side by side,
+each at its own `.localhost` name, without the user choosing ports.
+
 ### 5.3 Out of scope
 
 - Production use. No hardening for public exposure.
@@ -462,6 +481,8 @@ laptop CPU, 8 GB RAM, SSD).
 | Window open time | < 300 ms |
 | Start All (web server + PHP + MySQL, already installed) | < 3 s |
 | New folder in `www/` to reachable site | < 3 s |
+| First request to a fresh Laravel app after restarting MeowServer | < 0.3 s |
+| Warm request, Laravel welcome page | < 0.1 s |
 
 ### 8.2 Reliability
 
@@ -507,6 +528,26 @@ with glibc.
 All GUI actions reachable by keyboard; screen reader support through the GUI
 toolkit's accessibility layer (a criterion in the toolkit choice, §9.2);
 respects the OS light/dark setting and scaling.
+
+### 8.7 Lessons from slow Laragon setups
+
+Investigated on the owner's laptop in October 2026 (ADR 0007). Local sites
+under Laragon took seconds, sometimes over a minute, on the first page after
+a restart. Causes found, and the rule MeowServer follows for each:
+
+1. **Another program held port 80 on 127.0.0.1** while Apache held
+   0.0.0.0:80; on Windows the more specific one wins silently. → Before
+   starting, check every listener on the port on all addresses and name the
+   program (F9, F32).
+2. **OPcache was off.** → On by default, sized for large projects, with a
+   disk cache that survives reboots (§9.4).
+3. **`mod_fcgid` stopped idle PHP** after 5 minutes. → The PHP pool never
+   stops for idleness (§9.4).
+4. **Defender scanned thousands of `vendor/` files** on first use. → F39.
+
+Measured with MeowServer on the same laptop: the first request to a Laravel
+app after a restart dropped from 0.91 s (cold) to 0.08 s with the disk
+cache; warm requests are about 4× faster than with OPcache off.
 
 ## 9. Technical decisions
 
@@ -595,8 +636,16 @@ All three web servers talk to PHP over FastCGI, Apache included
   immediately, and the web server spreads requests across the ports (upstream
   in Nginx, multiple upstreams in Caddy's `php_fastcgi`, `mod_proxy_balancer`
   in Apache).
-- FastCGI ports come from 19000–19999 to stay clear of Xdebug's 9003 and
-  other common dev ports.
+- FastCGI ports come from 19000–19899 to stay clear of Xdebug's 9003 and
+  other common dev ports. Each PHP line has a fixed block of ten
+  (7.4 → 19240, 8.4 → 19340), so adding a version never moves another's.
+- OPcache is on in every pool: 256 MB, 50,000 files, timestamps checked on
+  every request so edits show at once, and `opcache.file_cache` under
+  `data/php/opcache/` so compiled scripts survive restarts (ADR 0007).
+- Apache reaches the pool through `mod_proxy_balancer` with
+  `ProxyFCGIBackendType GENERIC`; on Windows the handler URL needs a
+  trailing slash and the drive-letter path is fixed up with
+  `ProxyFCGISetEnvIf` (see the template).
 
 ### 9.5 Binary sources
 
@@ -612,7 +661,7 @@ Endpoint check, 2026-10-24:
 | PHP | `downloads.php.net/~windows/releases/releases.json` | ✅ | — | — | ✅ SHA-256 |
 | PHP | static-php-cli (`dl.static-php.dev`, JSON listing) | — | ✅ | ✅ | — |
 | Nginx | `nginx.org/download/` listing | ✅ | system | system | — (PGP) |
-| Apache | Apache Lounge download page | ✅ | system | system | — |
+| Apache | Apache Lounge download page | ✅ | system | system | ✅ SHA-256 (`.txt` per zip) |
 | MariaDB | `downloads.mariadb.org` REST API | ✅ | system | ✅ | ✅ SHA-256 |
 | MySQL | no API; curated list in this repo | ✅ | system | system | MD5 on site |
 | PostgreSQL | `postgresql.org/versions.json` + EDB zip | ✅ | system | system | — |
@@ -749,7 +798,7 @@ proxy = "http://127.0.0.1:3000"
 | PostgreSQL | 5432 | `postgres`, trust auth, loopback only |
 | Redis | 6379 | none, loopback only |
 | Mailpit | SMTP 1025, web 8025 | none |
-| PHP FastCGI | 19000–19999 | — |
+| PHP FastCGI | 19000–19899, ten per PHP line | — |
 | Caddy admin API | loopback, port allocated by `meowd` | — |
 | `meowd` IPC | named pipe / Unix socket, no TCP port | current user only |
 
@@ -974,6 +1023,7 @@ meow unlink <name>
 meow park <dir> / unpark <dir>
 meow site <name> --php 7.4    per-site settings
 meow site <name> --proxy 3000
+meow site <name> --proxy auto  pick a free dev-server port (F40)
 meow new laravel blog         quick create
 
 meow ssl trust                trust the local CA
@@ -984,6 +1034,10 @@ meow share <site>
 
 meow logs <service> [-f]
 meow shell                    shell with PATH set to active versions
+meow run -- composer install  one command with MeowServer's PATH and php.ini
+meow defender exclude|remove|show
+meow hosts sync|clear|show
+meow report [--open]          problem report, opened as a GitHub issue
 meow doctor
 meow uninstall --system       undo all system changes
 ```
@@ -1067,6 +1121,7 @@ directly:
 | 2026-10-25 | Technical decisions are delegated to the implementer and recorded as ADRs in `docs/adr/`. |
 | 2026-10-25 | Phase 0 results: Rust (ADR 0001), Slint software renderer (ADR 0002), Job Object per service (ADR 0003), `php-cgi` pool verified under load (ADR 0004), local DNS pending a manual admin test (ADR 0005), Xdebug from xdebug.org on Windows (ADR 0006). |
 | 2026-10-25 | Owner request: MeowServer's own errors can be reported by the user as a pre-filled GitHub issue; developers' site errors stay local (F38). |
+| 2026-10-25 | Owner request after slow Laragon sites on interns' laptops: performance rules in §8.7, Defender exclusions (F39), dev-server ports (F40). Evidence in ADR 0007. |
 
 No open questions remain for v1.0 scope. New questions are added here as they
 come up.
