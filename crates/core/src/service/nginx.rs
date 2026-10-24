@@ -32,6 +32,7 @@ struct Context {
     index_dir: PathBuf,
     pools: Vec<TemplatePool>,
     sites: Vec<TemplateSite>,
+    tls: Option<web::Tls>,
 }
 
 pub fn plan(layout: &Layout, config: &Config, sites: &[Site], php: &php::Plan) -> Result<Planned> {
@@ -53,7 +54,8 @@ pub fn plan(layout: &Layout, config: &Config, sites: &[Site], php: &php::Plan) -
         listen: web::listen(config, &["0.0.0.0", "[::]"]),
         index_dir: web::write_index(layout, config, sites, php)?,
         pools: web::pools(php),
-        sites: web::sites(layout, Kind::Nginx, sites, php),
+        sites: web::sites(layout, config, Kind::Nginx, sites, php),
+        tls: web::tls(layout, config, sites),
     };
     let conf = layout.generated().join("nginx").join("nginx.conf");
     write_generated(&conf, &template::render("nginx/nginx.conf", ctx)?)?;

@@ -221,3 +221,48 @@ msgstr "tanpa checksum resmi"
 
 msgid "Install"
 msgstr "Pasang"
+
+msgid "Start MeowServer when I log in"
+msgstr "Jalankan MeowServer saat saya login"
+
+msgid "Trust the HTTPS certificate"
+msgstr "Percayai sertifikat HTTPS"
+
+msgid "Trusted. https:// sites open without a warning."
+msgstr "Sudah dipercaya. Situs https:// terbuka tanpa peringatan."
+
+msgid "Lets https:// sites open without a warning. The certificate only works for .localhost, .test, and this computer."
+msgstr "Supaya situs https:// terbuka tanpa peringatan. Sertifikat ini hanya berlaku untuk .localhost, .test, dan komputer ini."
+
+msgid "Trusted"
+msgstr "Dipercaya"
+
+msgid "Trust"
+msgstr "Percayai"
+
+msgid "Undo system changes"
+msgstr "Batalkan perubahan sistem"
+
+msgid "Removes hosts entries, the trusted certificate, Defender exclusions, and the login item. Use before deleting the MeowServer folder."
+msgstr "Menghapus entri hosts, sertifikat yang dipercaya, pengecualian Defender, dan item login. Pakai sebelum menghapus folder MeowServer."
+
+msgid "Undo"
+msgstr "Batalkan"
+
+msgid "New project"
+msgstr "Proyek baru"
+
+msgid "New project in www/"
+msgstr "Proyek baru di www/"
+
+msgid "Blank PHP"
+msgstr "PHP kosong"
+
+msgid "Composer package"
+msgstr "Paket Composer"
+
+msgid "Template"
+msgstr "Templat"
+
+msgid "Create"
+msgstr "Buat"

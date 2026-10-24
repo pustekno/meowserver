@@ -40,6 +40,8 @@ pub struct General {
     pub lan_access: bool,
     /// Write hosts entries for every site (PRD F16).
     pub manage_hosts: bool,
+    /// Serve every site over HTTPS too, with the local CA (PRD F18).
+    pub https: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -129,6 +131,7 @@ impl Default for General {
             editor: None,
             lan_access: false,
             manage_hosts: true,
+            https: true,
         }
     }
 }

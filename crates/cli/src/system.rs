@@ -12,7 +12,7 @@ use anyhow::{Context, Result, bail};
 use clap::Subcommand;
 use meow_core::config::Config;
 use meow_core::layout::Layout;
-use meow_core::{defender, doctor, hosts, import, logs, platform, report};
+use meow_core::{defender, doctor, hosts, import, logs, platform, report, system, tls};
 
 use crate::{daemon, print};
 
@@ -24,6 +24,22 @@ pub enum HostsAction {
     Clear,
     /// Show the entries MeowServer wants.
     Show,
+}
+
+#[derive(Subcommand)]
+pub enum SslAction {
+    /// Add the CA to your trust store, so HTTPS sites show no warning.
+    Trust,
+    /// Remove the CA from your trust store.
+    Untrust,
+    /// Show where the CA is and whether it is trusted.
+    Status,
+}
+
+#[derive(Clone, Copy, clap::ValueEnum)]
+pub enum OnOff {
+    On,
+    Off,
 }
 
 #[derive(Subcommand)]
@@ -66,6 +82,14 @@ pub enum Privileged {
         home: PathBuf,
     },
     DefenderRemove {
+        #[arg(long)]
+        home: PathBuf,
+    },
+    CaInstall {
+        #[arg(long)]
+        home: PathBuf,
+    },
+    CaRemove {
         #[arg(long)]
         home: PathBuf,
     },
@@ -182,6 +206,52 @@ pub fn hosts(layout: &Layout, action: HostsAction) -> Result<()> {
     }
 }
 
+pub fn ssl(layout: &Layout, action: SslAction) -> Result<()> {
+    match action {
+        SslAction::Trust => {
+            println!("Adding {} to your trust store.", tls::ca_cert_path(layout).display());
+            println!(
+                "Windows and macOS ask you to confirm; the CA only works for .localhost, .test, and loopback."
+            );
+            tls::trust(layout)?;
+            println!("Trusted. HTTPS sites open without a warning (restart the browser if it was open).");
+        }
+        SslAction::Untrust => {
+            tls::untrust(layout)?;
+            println!("Removed from the trust store.");
+        }
+        SslAction::Status => {
+            println!("CA certificate: {}", tls::ca_cert_path(layout).display());
+            println!(
+                "Trusted: {}",
+                if tls::is_trusted(layout) { "yes" } else { "no (run `meow ssl trust`)" }
+            );
+        }
+    }
+    Ok(())
+}
+
+pub fn login(layout: &Layout, state: OnOff) -> Result<()> {
+    let on = matches!(state, OnOff::On);
+    system::set_login_item(layout, on)?;
+    let mut config = Config::load(layout)?;
+    config.general.start_on_login = on;
+    config.save(layout)?;
+    println!(
+        "{}",
+        if on { "MeowServer starts when you log in." } else { "MeowServer no longer starts at login." }
+    );
+    Ok(())
+}
+
+pub fn undo(layout: &Layout) -> Result<()> {
+    let meow = std::env::current_exe()?;
+    for note in system::undo(layout, &meow) {
+        println!("{note}");
+    }
+    Ok(())
+}
+
 pub fn defender(layout: &Layout, action: DefenderAction) -> Result<()> {
     let config = Config::load(layout)?;
     let (verb, paths) = match action {
@@ -287,6 +357,8 @@ pub fn privileged(action: Privileged) -> Result<()> {
             let layout = Layout::at(home);
             defender::apply(&layout, &defender::recorded(&layout).paths, false)
         }
+        Privileged::CaInstall { home } => tls::install_system_ca(&Layout::at(home), true),
+        Privileged::CaRemove { home } => tls::install_system_ca(&Layout::at(home), false),
     }
 }
 

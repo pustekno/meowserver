@@ -10,6 +10,9 @@ Define SRVROOT {{ install_dir | slashes | quote }}
 ServerRoot "${SRVROOT}"
 {% for addr in listen %}
 Listen {{ addr }}:{{ http_port }}
+{% if tls %}
+Listen {{ addr }}:{{ tls.port }}
+{% endif %}
 {% endfor %}
 
 {% for module in modules %}
@@ -55,20 +58,27 @@ Timeout 300
 </Proxy>
 {% endfor %}
 
-<VirtualHost *:{{ http_port }}>
+{% macro ssl_lines(tls) %}
+    SSLEngine on
+    SSLCertificateFile {{ tls.cert | slashes | quote }}
+    SSLCertificateKeyFile {{ tls.key | slashes | quote }}
+{% endmacro %}
+{% macro index_vhost(port, ssl, tls, index_dir) %}
+<VirtualHost *:{{ port }}>
     ServerName localhost
+{% if ssl %}{{ ssl_lines(tls) }}{% endif %}
     DocumentRoot {{ index_dir | slashes | quote }}
     <Directory {{ index_dir | slashes | quote }}>
         Require all granted
     </Directory>
 </VirtualHost>
-{% for site in sites %}
-
-{% if site.override %}
-Include {{ site.override | slashes | quote }}
-{% else %}
-<VirtualHost *:{{ http_port }}>
+{% endmacro %}
+{% macro site_vhost(site, port, ssl, tls) %}
+<VirtualHost *:{{ port }}>
     ServerName {{ site.host }}
+{% if ssl %}{{ ssl_lines(tls) }}{% elif site.force_https %}
+    Redirect permanent "/" "{{ site.https_url }}/"
+{% endif %}
 {% if site.proxy %}
     ProxyPreserveHost On
     ProxyPass "/" "{{ site.proxy }}/" upgrade=websocket
@@ -87,6 +97,20 @@ Include {{ site.override | slashes | quote }}
 {% endif %}
 {% endif %}
 </VirtualHost>
+{% endmacro %}
+{{ index_vhost(http_port, false, tls, index_dir) }}
+{% if tls %}
+{{ index_vhost(tls.port, true, tls, index_dir) }}
+{% endif %}
+{% for site in sites %}
+
+{% if site.override %}
+Include {{ site.override | slashes | quote }}
+{% else %}
+{{ site_vhost(site, http_port, false, tls) }}
+{% if tls %}
+{{ site_vhost(site, tls.port, true, tls) }}
+{% endif %}
 {% endif %}
 {% endfor %}
 

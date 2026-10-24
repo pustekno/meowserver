@@ -616,6 +616,79 @@ fn wire(window: &AppWindow, ui: &Ui) {
             })
         }
     });
+    b.on_set_start_on_login({
+        let ui = ui.clone();
+        move |on| {
+            let result = meow_core::system::set_login_item(&ui.layout, on).and_then(|()| {
+                edit_config(&ui.layout, |c| {
+                    c.general.start_on_login = on;
+                    Ok(())
+                })
+            });
+            if let Err(e) = result {
+                ui.message(format!("{e:#}"), true);
+            }
+            ui.refresh();
+        }
+    });
+    b.on_trust_ca({
+        let ui = ui.clone();
+        move || {
+            ui.run(|l, _| {
+                meow_core::tls::trust(l)?;
+                Ok(t("Trusted. Restart the browser if it was open."))
+            })
+        }
+    });
+    b.on_undo_system({
+        let ui = ui.clone();
+        move || {
+            ui.run(|l, _| {
+                let meow = std::env::current_exe()?.with_file_name(format!("meow{}", platform::EXE_SUFFIX));
+                Ok(meow_core::system::undo(l, &meow).join("\n"))
+            })
+        }
+    });
+    b.on_show_create({
+        let weak = window.as_weak();
+        move |on| {
+            if let Some(w) = weak.upgrade() {
+                let b = w.global::<Backend>();
+                b.set_creating(on);
+                b.set_setup_progress(SharedString::new());
+            }
+        }
+    });
+    b.on_create_project({
+        let weak = window.as_weak();
+        let ui = ui.clone();
+        move || {
+            let Some(w) = weak.upgrade() else { return };
+            let b = w.global::<Backend>();
+            let name = b.get_new_name().to_string();
+            let package = b.get_new_package().to_string();
+            let template = match b.get_template_index() {
+                1 => meow_core::create::Template::Laravel,
+                2 => meow_core::create::Template::WordPress,
+                3 => meow_core::create::Template::Composer(package),
+                _ => meow_core::create::Template::Blank,
+            };
+            let weak = weak.clone();
+            ui.run(move |l, ui| {
+                let dir =
+                    meow_core::create::create(l, &template, &name, &mut |text| ui.progress(text.to_owned()))?;
+                actions::reload(l);
+                ui.progress(String::new());
+                let weak = weak.clone();
+                ui.on_ui(move |_| {
+                    if let Some(w) = weak.upgrade() {
+                        w.global::<Backend>().set_creating(false);
+                    }
+                });
+                Ok(format!("{} {}", t("Created"), dir.display()))
+            });
+        }
+    });
     b.on_run_doctor({
         let ui = ui.clone();
         move || run_doctor(&ui)
@@ -674,6 +747,8 @@ fn apply(w: &AppWindow, snap: &snapshot::Snapshot, local: &mut Local) {
     b.set_web_index(snapshot::web_index(c.general.web_server));
     b.set_lan_access(c.general.lan_access);
     b.set_manage_hosts(c.general.manage_hosts);
+    b.set_start_on_login(c.general.start_on_login);
+    b.set_ca_trusted(meow_core::tls::is_trusted(&w_layout(w)));
 
     local.sites = snap.sites.clone();
     show_sites(w, local);

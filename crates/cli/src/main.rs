@@ -83,6 +83,14 @@ enum Cmd {
     Park { dir: PathBuf },
     /// Stop serving a parked folder.
     Unpark { dir: PathBuf },
+    /// Create a project in www/: blank, laravel, wordpress, or composer <package>.
+    New {
+        template: String,
+        name: String,
+        /// For `composer`: the package to create from, e.g. symfony/skeleton.
+        #[arg(long)]
+        package: Option<String>,
+    },
     /// Change one site's settings.
     Site {
         name: String,
@@ -120,6 +128,16 @@ enum Cmd {
         #[command(subcommand)]
         action: system::HostsAction,
     },
+    /// Local HTTPS: trust or untrust MeowServer's certificate authority.
+    Ssl {
+        #[command(subcommand)]
+        action: system::SslAction,
+    },
+    /// Start MeowServer when you log in (`on`) or not (`off`).
+    Login { state: system::OnOff },
+    /// Undo every change MeowServer made outside its folder (hosts entries,
+    /// trusted certificate, Defender exclusions, login item).
+    UndoSystemChanges,
     /// Exclude MeowServer and project folders from Microsoft Defender scanning.
     Defender {
         #[command(subcommand)]
@@ -188,6 +206,9 @@ fn run(cli: Cli) -> Result<()> {
         Cmd::Unlink { name } => sites::unlink(&layout, &name),
         Cmd::Park { dir } => sites::park(&layout, &dir),
         Cmd::Unpark { dir } => sites::unpark(&layout, &dir),
+        Cmd::New { template, name, package } => {
+            sites::new_project(&layout, &template, &name, package.as_deref())
+        }
         Cmd::Site { name, php, proxy, root } => sites::configure(&layout, &name, php, proxy, root),
 
         Cmd::Shell => system::shell(&layout),
@@ -196,6 +217,9 @@ fn run(cli: Cli) -> Result<()> {
         Cmd::Doctor => system::doctor(&layout, json),
         Cmd::Hosts { action } => system::hosts(&layout, action),
         Cmd::Defender { action } => system::defender(&layout, action),
+        Cmd::Ssl { action } => system::ssl(&layout, action),
+        Cmd::Login { state } => system::login(&layout, state),
+        Cmd::UndoSystemChanges => system::undo(&layout),
         Cmd::Import { from } => system::import(&layout, from),
         Cmd::Report { open } => system::report(&layout, open),
         Cmd::Privileged { .. } => unreachable!(),

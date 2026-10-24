@@ -33,6 +33,7 @@ struct Context {
     listen: Vec<&'static str>,
     index_dir: PathBuf,
     sites: Vec<TemplateSite>,
+    tls: Option<web::Tls>,
 }
 
 pub fn plan(layout: &Layout, config: &Config, sites: &[Site], php: &php::Plan) -> Result<Planned> {
@@ -50,7 +51,8 @@ pub fn plan(layout: &Layout, config: &Config, sites: &[Site], php: &php::Plan) -
         custom_dir: custom,
         listen: web::listen(config, &[]),
         index_dir: web::write_index(layout, config, sites, php)?,
-        sites: web::sites(layout, Kind::Caddy, sites, php),
+        sites: web::sites(layout, config, Kind::Caddy, sites, php),
+        tls: web::tls(layout, config, sites),
     };
     let caddyfile = layout.generated().join("caddy").join("Caddyfile");
     write_generated(&caddyfile, &template::render("caddy/Caddyfile", ctx)?)?;

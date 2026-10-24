@@ -166,6 +166,14 @@ pub fn run(layout: &Layout) -> Vec<Check> {
         }
     }
 
+    if config.general.https && !crate::tls::is_trusted(layout) {
+        checks.push(Check::problem(
+            "HTTPS",
+            "browsers show a warning on https:// sites until the local certificate authority is trusted",
+            "meow ssl trust (or Settings → Trust HTTPS certificate)",
+        ));
+    }
+
     if crate::defender::realtime_enabled() == Some(true) {
         let missing = crate::defender::missing(layout, &config);
         if missing.is_empty() {

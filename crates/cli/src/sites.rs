@@ -34,6 +34,15 @@ fn edit(layout: &Layout, change: impl FnOnce(&mut Config) -> Result<String>) -> 
     daemon::reload_if_running(layout)
 }
 
+pub fn new_project(layout: &Layout, template: &str, name: &str, package: Option<&str>) -> Result<()> {
+    let template = meow_core::create::Template::parse(template, package)?;
+    let dir = meow_core::create::create(layout, &template, name, &mut |text| println!("{text}"))?;
+    let config = Config::load(layout)?;
+    let slug = site::slugify(name).unwrap_or_default();
+    println!("Created {} → http://{slug}.{}", dir.display(), config.general.suffix.as_str());
+    daemon::reload_if_running(layout)
+}
+
 pub fn link(layout: &Layout, path: &Path, name: Option<&str>) -> Result<()> {
     edit(layout, |config| {
         let name = manage::link(layout, config, path, name)?;

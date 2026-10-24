@@ -89,6 +89,10 @@ export global Backend {
     in-out property <string> add-name;
     in property <string> add-preview;
     in property <string> add-error;
+    in property <bool> creating;
+    in-out property <int> template-index;
+    in-out property <string> new-name;
+    in-out property <string> new-package;
 
     // Versions.
     in property <[string]> kinds;
@@ -114,6 +118,8 @@ export global Backend {
     in property <bool> lan-access;
     in property <bool> manage-hosts;
     in property <bool> defender-available;
+    in property <bool> start-on-login;
+    in property <bool> ca-trusted;
     in property <string> version;
     in property <string> attribution;
     in property <string> root-dir;
@@ -154,6 +160,11 @@ export global Backend {
     callback set-lan(bool);
     callback set-manage-hosts(bool);
     callback defender-exclude();
+    callback set-start-on-login(bool);
+    callback trust-ca();
+    callback undo-system();
+    callback show-create(bool);
+    callback create-project();
     callback run-doctor();
     callback report-problem();
     callback open-logs();

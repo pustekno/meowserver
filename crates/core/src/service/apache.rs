@@ -53,6 +53,7 @@ const MODULES: &[&str] = &[
     "setenvif",
     "slotmem_shm",
     "socache_shmcb",
+    "ssl",
 ];
 
 #[derive(Serialize)]
@@ -68,6 +69,7 @@ struct Context {
     index_dir: PathBuf,
     pools: Vec<TemplatePool>,
     sites: Vec<TemplateSite>,
+    tls: Option<web::Tls>,
 }
 
 pub fn plan(layout: &Layout, config: &Config, sites: &[Site], php: &php::Plan) -> Result<Planned> {
@@ -93,7 +95,8 @@ pub fn plan(layout: &Layout, config: &Config, sites: &[Site], php: &php::Plan) -
         windows: os() == Os::Windows,
         index_dir: web::write_index(layout, config, sites, php)?,
         pools: web::pools(php),
-        sites: web::sites(layout, Kind::Apache, sites, php),
+        sites: web::sites(layout, config, Kind::Apache, sites, php),
+        tls: web::tls(layout, config, sites),
     };
     let conf = layout.generated().join("apache").join("httpd.conf");
     write_generated(&conf, &template::render("apache/httpd.conf", ctx)?)?;

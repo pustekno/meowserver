@@ -22,6 +22,8 @@ flate2.workspace = true
 tar.workspace = true
 interprocess.workspace = true
 notify.workspace = true
+rcgen.workspace = true
+time.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { workspace = true, features = [

@@ -90,11 +90,65 @@ export component SitesPage inherits VerticalLayout {
         title: @tr("Sites");
         subtitle: @tr("Every folder in www/ and every added project. Folders are never changed or deleted.");
         Button {
+            text: @tr("New project");
+            enabled: !Backend.busy;
+            clicked => {
+                Backend.show-create(true);
+            }
+        }
+        Button {
             text: @tr("Add project");
             primary: true;
             clicked => {
                 Backend.pick-folder();
             }
+        }
+    }
+
+    if Backend.creating: Card {
+        Text {
+            text: @tr("New project in www/");
+            font-weight: 600;
+        }
+        HorizontalLayout {
+            spacing: 8px;
+            ComboBox {
+                width: 160px;
+                model: [@tr("Blank PHP"), "Laravel", "WordPress", @tr("Composer package")];
+                current-index <=> Backend.template-index;
+                accessible-label: @tr("Template");
+            }
+            LineEdit {
+                horizontal-stretch: 1;
+                text <=> Backend.new-name;
+                placeholder-text: @tr("Site name");
+                accessible-label: @tr("Site name");
+            }
+            if Backend.template-index == 3: LineEdit {
+                width: 200px;
+                text <=> Backend.new-package;
+                placeholder-text: "vendor/package";
+                accessible-label: @tr("Composer package");
+            }
+            Button {
+                text: @tr("Create");
+                primary: true;
+                enabled: !Backend.busy && Backend.new-name != "";
+                clicked => {
+                    Backend.create-project();
+                }
+            }
+            Button {
+                text: @tr("Cancel");
+                clicked => {
+                    Backend.show-create(false);
+                }
+            }
+        }
+        if Backend.setup-progress != "": Text {
+            text: Backend.setup-progress;
+            color: Theme.muted;
+            wrap: word-wrap;
         }
     }
 

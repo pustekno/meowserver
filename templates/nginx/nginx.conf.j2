@@ -42,11 +42,21 @@ http {
     }
 {% endfor %}
 
+{% if tls %}
+    ssl_certificate {{ tls.cert | slashes | quote }};
+    ssl_certificate_key {{ tls.key | slashes | quote }};
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_session_cache shared:SSL:1m;
+
+{% endif %}
     include {{ (custom_dir ~ "/http/*.conf") | slashes | quote }};
 
     server {
 {% for addr in listen %}
         listen {{ addr }}:{{ http_port }} default_server;
+{% if tls %}
+        listen {{ addr }}:{{ tls.port }} ssl default_server;
+{% endif %}
 {% endfor %}
         server_name localhost;
         root {{ index_dir | slashes | quote }};
@@ -60,8 +70,16 @@ http {
     server {
 {% for addr in listen %}
         listen {{ addr }}:{{ http_port }};
+{% if tls %}
+        listen {{ addr }}:{{ tls.port }} ssl;
+{% endif %}
 {% endfor %}
         server_name {{ site.host }};
+{% if site.force_https %}
+        if ($scheme = http) {
+            return 301 {{ site.https_url }}$request_uri;
+        }
+{% endif %}
 {% if site.proxy %}
 
         location / {
