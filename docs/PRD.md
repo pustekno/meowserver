@@ -334,6 +334,19 @@ against a pre-install snapshot is empty.
 checks GitHub Releases at most once a day and shows a notification. No
 self-update in v1.0.
 
+**F38 — Problem reports.** Errors in MeowServer itself are logged to
+`logs/meowd.log`; a crash also writes `logs/crash-<time>.log` with the panic
+message and backtrace. On the next start the tray and GUI offer "Report this
+problem". `meow report` and the GUI's Help → Report a problem build a report
+(MeowServer version, OS, active services and versions, the last 200 lines of
+`meowd.log`, the latest crash log), show it for review, and open a pre-filled
+GitHub issue in the browser. Nothing is sent unless the user submits the
+issue; paths under the user's home folder are shortened to `~`. Errors from
+the user's own sites (PHP, web server, database logs) are viewable in the app
+but never part of a report.
+*Done when:* a forced panic in `meowd` leads, after restart, to a pre-filled
+issue page containing the panic message.
+
 ### 5.3 Out of scope
 
 - Production use. No hardening for public exposure.
@@ -519,9 +532,10 @@ The trade-off is a steeper learning curve; recorded in ADR 0001.
 
 ### 9.2 GUI: native toolkit, no webview
 
-Candidates: **Slint** and **iced**, decided in Phase 0 on idle RAM, binary
-size, appearance on all three OSes, HiDPI, accessibility, and ease of
-contribution.
+**Decision (Phase 0, ADR 0002): Slint with the software renderer.** Measured
+23 MB working set and 0% idle CPU; GPU renderers cost ~100 MB more and were
+rejected. Slint won over iced on accessibility and start time. The candidates
+as originally evaluated:
 
 - **Slint**: declarative `.slint` files separate from logic, built for small
   devices, accessibility through AccessKit. Available under GPLv3, which
@@ -856,16 +870,17 @@ meowserver/
 │   │       ├── dns.rs         # local resolver (F17)
 │   │       ├── tls.rs         # local CA and per-site certificates
 │   │       ├── ipc.rs         # client ↔ meowd protocol
+│   │       ├── engine.rs      # turns config + sites into running services
+│   │       ├── logging.rs     # meowd log, rotation, crash logs
 │   │       └── platform/      # the only place for OS-specific code
 │   │           ├── mod.rs
 │   │           ├── windows.rs
-│   │           ├── macos.rs
-│   │           └── linux.rs
+│   │           └── unix.rs    # macOS + Linux, with cfg for the differences
 │   ├── cli/                   # `meow` binary
 │   ├── daemon/                # `meowd` binary: supervisor + tray, no GUI toolkit
 │   └── app/                   # `meowserver` binary: GUI window, IPC client
 │       ├── src/
-│       └── ui/                # .slint files (if Slint is chosen)
+│       └── ui/                # .slint files
 ├── templates/                 # config templates per service
 │   ├── caddy/  nginx/  apache/  php/  mysql/  mariadb/  postgres/  redis/
 │   └── index/                 # localhost index page (F14)
@@ -1050,6 +1065,8 @@ directly:
 | 2026-10-25 | **Name "MeowServer" accepted.** A web search found only the inactive GitHub account `MeowServer`; no product of that name. Crate names `meowserver`, `meow-core`, `meowd` are free on crates.io. The project is non-commercial, so if a dispute ever arises the project is renamed rather than contested. |
 | 2026-10-25 | **First-run language** follows the OS language when a translation exists, otherwise English. The first-run screen shows the choice either way (§6.1). |
 | 2026-10-25 | Technical decisions are delegated to the implementer and recorded as ADRs in `docs/adr/`. |
+| 2026-10-25 | Phase 0 results: Rust (ADR 0001), Slint software renderer (ADR 0002), Job Object per service (ADR 0003), `php-cgi` pool verified under load (ADR 0004), local DNS pending a manual admin test (ADR 0005), Xdebug from xdebug.org on Windows (ADR 0006). |
+| 2026-10-25 | Owner request: MeowServer's own errors can be reported by the user as a pre-filled GitHub issue; developers' site errors stay local (F38). |
 
 No open questions remain for v1.0 scope. New questions are added here as they
 come up.

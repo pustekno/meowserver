@@ -1,0 +1,20 @@
+[package]
+name = "meow-daemon"
+description = "MeowServer supervisor and tray (meowd)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "meowd"
+path = "src/main.rs"
+
+[dependencies]
+meow-core.workspace = true
+anyhow.workspace = true
+log.workspace = true
+tray-icon.workspace = true
+tao.workspace = true

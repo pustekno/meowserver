@@ -1,0 +1,38 @@
+[workspace]
+resolver = "3"
+members = ["crates/core", "crates/cli", "crates/daemon"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/pustekno/meowserver"
+authors = ["Pustekno <https://pustekno.id>", "Puskomedia <https://www.puskomedia.id>"]
+
+[workspace.dependencies]
+meow-core = { path = "crates/core" }
+anyhow = "1"
+log = { version = "0.4", features = ["std"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "1"
+minijinja = { version = "3", default-features = false, features = ["builtins", "serde"] }
+ureq = { version = "3", default-features = false, features = ["rustls", "json"] }
+sha2 = "0.11"
+zip = { version = "9", default-features = false, features = ["deflate"] }
+flate2 = "1"
+tar = "0.4"
+interprocess = "2"
+notify = "8"
+clap = { version = "4", features = ["derive"] }
+tray-icon = "0.26"
+tao = { version = "0.37", default-features = false }
+windows-sys = "0.61"
+libc = "0.2"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true
