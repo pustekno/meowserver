@@ -115,8 +115,11 @@ impl Default for Config {
 
 impl Default for General {
     fn default() -> Self {
+        // First run follows the OS language when a translation exists
+        // (PRD §19); otherwise English.
+        let os_language = crate::platform::language();
         Self {
-            language: "en".into(),
+            language: if os_language == "id" { "id".into() } else { "en".into() },
             suffix: Suffix::Localhost,
             web_server: WebServer::Caddy,
             www: PathBuf::from("www"),
@@ -165,8 +168,11 @@ impl Config {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Self::default()),
             Err(e) => return Err(e).with_context(|| format!("cannot read {}", path.display())),
         };
+        // Notepad and PowerShell 5 save UTF-8 with a byte-order mark, which
+        // TOML does not allow; accept it rather than fail.
+        let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
         let config: Config =
-            toml::from_str(&text).with_context(|| format!("{} is not valid", path.display()))?;
+            toml::from_str(text).with_context(|| format!("{} is not valid", path.display()))?;
         if config.schema > SCHEMA {
             bail!(
                 "{} was written by a newer MeowServer (schema {}); this version understands schema {SCHEMA}",
@@ -242,6 +248,16 @@ mod tests {
         assert_eq!(c.sites["asis"].php.as_deref(), Some("8.3"));
         assert!(c.sites["asis"].force_https);
         assert_eq!(c.general.language, "en", "missing keys fall back to defaults");
+    }
+
+    #[test]
+    fn accepts_byte_order_mark() {
+        let dir = std::env::temp_dir().join(format!("meow-bom-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("meow.toml"), "\u{feff}[services.web]\nport = 8080\n").unwrap();
+        let config = Config::load(&Layout::at(dir.clone())).unwrap();
+        assert_eq!(config.port("web", 80), 8080);
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

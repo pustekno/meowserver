@@ -1,0 +1,223 @@
+# Indonesian translation of the MeowServer window.
+# To add a language: copy this file to locales/<code>/LC_MESSAGES/meow-app.po
+# and translate every msgstr. See CONTRIBUTING.md.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: id\n"
+
+msgid "Home"
+msgstr "Beranda"
+
+msgid "Sites"
+msgstr "Situs"
+
+msgid "Versions"
+msgstr "Versi"
+
+msgid "PHP"
+msgstr "PHP"
+
+msgid "Databases"
+msgstr "Database"
+
+msgid "Settings"
+msgstr "Pengaturan"
+
+msgid "Dismiss"
+msgstr "Tutup"
+
+msgid "Reachable from this computer only. Default user without a password."
+msgstr "Hanya bisa diakses dari komputer ini. Pengguna bawaan tanpa password."
+
+msgid "No database server installed. Install MySQL, MariaDB, or PostgreSQL on the Versions page."
+msgstr "Belum ada server database. Pasang MySQL, MariaDB, atau PostgreSQL di halaman Versi."
+
+msgid "Stop"
+msgstr "Hentikan"
+
+msgid "Start"
+msgstr "Jalankan"
+
+msgid "Data folder"
+msgstr "Folder data"
+
+msgid "Host 127.0.0.1, port {}, user {}"
+msgstr "Host 127.0.0.1, port {}, pengguna {}"
+
+msgid "Start All"
+msgstr "Jalankan Semua"
+
+msgid "Stop All"
+msgstr "Hentikan Semua"
+
+msgid "Welcome to MeowServer"
+msgstr "Selamat datang di MeowServer"
+
+msgid "Nothing is installed yet. The recommended stack is Caddy, the newest PHP, and MySQL 8.4, downloaded from their official sources."
+msgstr "Belum ada yang terpasang. Paket yang disarankan: Caddy, PHP terbaru, dan MySQL 8.4, diunduh dari sumber resminya."
+
+msgid "Install recommended stack"
+msgstr "Pasang paket yang disarankan"
+
+msgid "Import from Laragon"
+msgstr "Impor dari Laragon"
+
+msgid "Services"
+msgstr "Layanan"
+
+msgid "not installed"
+msgstr "belum terpasang"
+
+msgid "Open localhost"
+msgstr "Buka localhost"
+
+msgid "Terminal"
+msgstr "Terminal"
+
+msgid "Logs"
+msgstr "Log"
+
+msgid "Things to check"
+msgstr "Perlu diperiksa"
+
+msgid "Check again"
+msgstr "Periksa lagi"
+
+msgid "Fix: {}"
+msgstr "Solusi: {}"
+
+msgid "Settings apply to every PHP version. Other options go in etc/custom/php/."
+msgstr "Pengaturan berlaku untuk semua versi PHP. Opsi lain taruh di etc/custom/php/."
+
+msgid "PHP version"
+msgstr "Versi PHP"
+
+msgid "Save and apply"
+msgstr "Simpan dan terapkan"
+
+msgid "Extensions"
+msgstr "Ekstensi"
+
+msgid "This PHP build has its extensions compiled in."
+msgstr "Ekstensi PHP ini sudah tertanam di dalam programnya."
+
+msgid "Language"
+msgstr "Bahasa"
+
+msgid "Web server"
+msgstr "Web server"
+
+msgid "Site names end in"
+msgstr "Akhiran nama situs"
+
+msgid ".localhost works in browsers without changing anything; .test needs hosts entries."
+msgstr ".localhost langsung jalan di browser tanpa mengubah apa pun; .test butuh entri file hosts."
+
+msgid "Write hosts entries"
+msgstr "Tulis entri file hosts"
+
+msgid "Lets PHP and Node reach your sites by name. Asks for administrator rights when sites change."
+msgstr "Supaya PHP dan Node bisa memanggil situs lewat namanya. Meminta hak admin saat daftar situs berubah."
+
+msgid "Allow access from the local network"
+msgstr "Izinkan akses dari jaringan lokal"
+
+msgid "For testing on a phone. Databases stay private."
+msgstr "Untuk tes dari HP. Database tetap tertutup."
+
+msgid "Speed up first page loads"
+msgstr "Percepat pemuatan halaman pertama"
+
+msgid "Excludes MeowServer and your project folders from Microsoft Defender scanning. Asks for administrator rights once."
+msgstr "Mengecualikan folder MeowServer dan proyek dari pemindaian Microsoft Defender. Meminta hak admin sekali."
+
+msgid "Exclude folders"
+msgstr "Kecualikan folder"
+
+msgid "Something wrong?"
+msgstr "Ada masalah?"
+
+msgid "Opens a GitHub issue filled with MeowServer's version and recent log. You review it before sending; your sites' logs are not included."
+msgstr "Membuka issue GitHub berisi versi MeowServer dan log terbaru. Kamu periksa dulu sebelum mengirim; log situs-situsmu tidak ikut."
+
+msgid "Report a problem"
+msgstr "Laporkan masalah"
+
+msgid "About"
+msgstr "Tentang"
+
+msgid "Free software under the GNU GPL 3.0 or later, with the attribution term in NOTICE. No warranty."
+msgstr "Perangkat lunak bebas di bawah GNU GPL 3.0 atau lebih baru, dengan syarat atribusi di NOTICE. Tanpa jaminan."
+
+msgid "Source code"
+msgstr "Kode sumber"
+
+msgid "PHP version for {}"
+msgstr "Versi PHP untuk {}"
+
+msgid "proxy"
+msgstr "proxy"
+
+msgid "Folder"
+msgstr "Folder"
+
+msgid "Remove"
+msgstr "Hapus"
+
+msgid "Every folder in www/ and every added project. Folders are never changed or deleted."
+msgstr "Semua folder di www/ dan semua proyek yang ditambahkan. Folder tidak pernah diubah atau dihapus."
+
+msgid "Add project"
+msgstr "Tambah proyek"
+
+msgid "Site name"
+msgstr "Nama situs"
+
+msgid "Add"
+msgstr "Tambah"
+
+msgid "Cancel"
+msgstr "Batal"
+
+msgid "Search by name or folder"
+msgstr "Cari nama atau folder"
+
+msgid "Search sites"
+msgstr "Cari situs"
+
+msgid "No sites yet. Create a folder in www/ or use Add project."
+msgstr "Belum ada situs. Buat folder di www/ atau pakai Tambah proyek."
+
+msgid "Downloads come from each project's official source."
+msgstr "Unduhan diambil dari sumber resmi masing-masing proyek."
+
+msgid "Service"
+msgstr "Layanan"
+
+msgid "Installed"
+msgstr "Terpasang"
+
+msgid "None installed."
+msgstr "Belum ada yang terpasang."
+
+msgid "active"
+msgstr "aktif"
+
+msgid "Use"
+msgstr "Pakai"
+
+msgid "Available"
+msgstr "Tersedia"
+
+msgid "Loading…"
+msgstr "Memuat…"
+
+msgid "Check for versions"
+msgstr "Cek versi"
+
+msgid "no official checksum"
+msgstr "tanpa checksum resmi"
+
+msgid "Install"
+msgstr "Pasang"

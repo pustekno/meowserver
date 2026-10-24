@@ -6,6 +6,7 @@
 //!
 //! `meowd`, `meow`, and `meowserver` only call into this crate (PRD §11).
 
+pub mod branding;
 pub mod config;
 pub mod defender;
 pub mod doctor;

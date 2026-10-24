@@ -4,10 +4,9 @@
 
 //! Talking to `meowd`, and starting it when needed.
 
-use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Result, bail};
 use meow_core::ipc::{Client, Request};
 use meow_core::layout::Layout;
 
@@ -57,25 +56,5 @@ pub fn status(layout: &Layout, json: bool) -> Result<()> {
 
 /// Connects to `meowd`, starting it first if needed.
 pub fn ensure(layout: &Layout, headless: bool) -> Result<Client> {
-    if let Ok(client) = Client::connect(layout) {
-        return Ok(client);
-    }
-    let meowd = std::env::current_exe()?.with_file_name(format!("meowd{}", std::env::consts::EXE_SUFFIX));
-    let mut cmd = Command::new(&meowd);
-    if headless {
-        cmd.arg("--headless");
-    }
-    cmd.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
-    meow_core::platform::spawn_detached(&mut cmd)
-        .with_context(|| format!("cannot start {}", meowd.display()))?;
-    let deadline = Instant::now() + Duration::from_secs(10);
-    loop {
-        if let Ok(client) = Client::connect(layout) {
-            return Ok(client);
-        }
-        if Instant::now() > deadline {
-            bail!("MeowServer did not start; see {}", layout.logs().join("meowd.log").display());
-        }
-        std::thread::sleep(Duration::from_millis(100));
-    }
+    meow_core::ipc::ensure_running(layout, headless)
 }

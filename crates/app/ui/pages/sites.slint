@@ -1,0 +1,169 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 PT Pusat Teknologi Nusantara and PT Puskomedia Indonesia Kreatif
+// Additional terms under GPLv3 section 7(b) apply; see NOTICE.
+
+// Sites (PRD F7, F8, §6.3): every project in one list, and adding a folder
+// from anywhere without shortcuts or junctions.
+
+import { Button, ComboBox, LineEdit, ScrollView } from "std-widgets.slint";
+import { Backend, SiteRow } from "../backend.slint";
+import { Card, Link, PageHeader, Theme } from "../widgets.slint";
+
+component SiteItem inherits Rectangle {
+    in property <SiteRow> site;
+    min-height: 56px;
+    border-radius: 6px;
+    background: hover.has-hover ? Theme.card : transparent;
+    hover := TouchArea { }
+    HorizontalLayout {
+        padding: 8px;
+        spacing: 12px;
+        VerticalLayout {
+            horizontal-stretch: 1;
+            alignment: center;
+            Link {
+                text: root.site.url;
+                font-weight: 600;
+                clicked => {
+                    Backend.open-url(root.site.url);
+                }
+            }
+            Text {
+                text: root.site.folder;
+                color: Theme.muted;
+                overflow: elide;
+            }
+        }
+        Text {
+            text: root.site.framework;
+            vertical-alignment: center;
+            color: Theme.muted;
+            width: 90px;
+        }
+        if !root.site.proxy: ComboBox {
+            width: 110px;
+            y: (parent.height - self.height) / 2;
+            model: Backend.php-choices;
+            current-index: root.site.php-index;
+            accessible-label: @tr("PHP version for {}", root.site.name);
+            selected(value) => {
+                Backend.set-site-php(root.site.name, value);
+            }
+        }
+        if root.site.proxy: Text {
+            text: @tr("proxy");
+            width: 110px;
+            vertical-alignment: center;
+            color: Theme.muted;
+        }
+        Button {
+            text: @tr("Folder");
+            enabled: !root.site.proxy;
+            y: (parent.height - self.height) / 2;
+            clicked => {
+                Backend.open-path(root.site.folder);
+            }
+        }
+        Button {
+            text: @tr("Terminal");
+            enabled: !root.site.proxy;
+            y: (parent.height - self.height) / 2;
+            clicked => {
+                Backend.open-terminal(root.site.folder);
+            }
+        }
+        Button {
+            text: @tr("Remove");
+            enabled: root.site.removable;
+            y: (parent.height - self.height) / 2;
+            clicked => {
+                Backend.remove-site(root.site.name);
+            }
+        }
+    }
+}
+
+export component SitesPage inherits VerticalLayout {
+    spacing: Theme.gap;
+
+    PageHeader {
+        title: @tr("Sites");
+        subtitle: @tr("Every folder in www/ and every added project. Folders are never changed or deleted.");
+        Button {
+            text: @tr("Add project");
+            primary: true;
+            clicked => {
+                Backend.pick-folder();
+            }
+        }
+    }
+
+    if Backend.adding: Card {
+        Text {
+            text: @tr("Add project");
+            font-weight: 600;
+        }
+        Text {
+            text: Backend.add-path;
+            color: Theme.muted;
+            overflow: elide;
+        }
+        HorizontalLayout {
+            spacing: 8px;
+            LineEdit {
+                horizontal-stretch: 1;
+                text <=> Backend.add-name;
+                placeholder-text: @tr("Site name");
+                accessible-label: @tr("Site name");
+                edited(text) => {
+                    Backend.add-name-edited(text);
+                }
+                accepted => {
+                    Backend.confirm-add();
+                }
+            }
+            Button {
+                text: @tr("Add");
+                primary: true;
+                enabled: Backend.add-error == "";
+                clicked => {
+                    Backend.confirm-add();
+                }
+            }
+            Button {
+                text: @tr("Cancel");
+                clicked => {
+                    Backend.cancel-add();
+                }
+            }
+        }
+        Text {
+            text: Backend.add-error != "" ? Backend.add-error : Backend.add-preview;
+            color: Backend.add-error != "" ? Theme.bad : Theme.muted;
+        }
+    }
+
+    LineEdit {
+        placeholder-text: @tr("Search by name or folder");
+        accessible-label: @tr("Search sites");
+        text <=> Backend.site-filter;
+        edited(text) => {
+            Backend.search(text);
+        }
+    }
+
+    if Backend.sites.length == 0: Text {
+        text: @tr("No sites yet. Create a folder in www/ or use Add project.");
+        color: Theme.muted;
+    }
+
+    sv := ScrollView {
+        VerticalLayout {
+            width: sv.visible-width;
+            alignment: start;
+            for site in Backend.sites: SiteItem {
+                site: site;
+            }
+        }
+    }
+}

@@ -1,0 +1,173 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 PT Pusat Teknologi Nusantara and PT Puskomedia Indonesia Kreatif
+// Additional terms under GPLv3 section 7(b) apply; see NOTICE.
+
+// Settings and About (PRD §6.2). About carries the attribution required by
+// NOTICE (GPLv3 section 7(b)); it must stay visible.
+
+import { Button, ComboBox, ScrollView, Switch } from "std-widgets.slint";
+import { Backend } from "../backend.slint";
+import { Card, Link, PageHeader, Theme } from "../widgets.slint";
+
+component Row inherits HorizontalLayout {
+    in property <string> label;
+    in property <string> hint;
+    spacing: 10px;
+    VerticalLayout {
+        horizontal-stretch: 1;
+        alignment: center;
+        Text {
+            text: root.label;
+        }
+        if root.hint != "": Text {
+            text: root.hint;
+            color: Theme.muted;
+            wrap: word-wrap;
+        }
+    }
+    @children
+}
+
+export component SettingsPage inherits VerticalLayout {
+    spacing: Theme.gap;
+
+    PageHeader {
+        title: @tr("Settings");
+    }
+
+    sv := ScrollView {
+        VerticalLayout {
+            width: sv.visible-width;
+            spacing: Theme.gap;
+            alignment: start;
+            Card {
+                Row {
+                    label: @tr("Language");
+                    ComboBox {
+                        width: 180px;
+                        model: ["English", "Bahasa Indonesia"];
+                        current-index: Backend.language-index;
+                        selected => {
+                            Backend.set-language(self.current-index);
+                        }
+                    }
+                }
+                Row {
+                    label: @tr("Web server");
+                    ComboBox {
+                        width: 180px;
+                        model: ["Caddy", "Nginx", "Apache"];
+                        current-index: Backend.web-index;
+                        selected => {
+                            Backend.set-web(self.current-index);
+                        }
+                    }
+                }
+                Row {
+                    label: @tr("Site names end in");
+                    hint: @tr(".localhost works in browsers without changing anything; .test needs hosts entries.");
+                    ComboBox {
+                        width: 180px;
+                        model: [".localhost", ".test"];
+                        current-index: Backend.suffix-index;
+                        selected => {
+                            Backend.set-suffix(self.current-index);
+                        }
+                    }
+                }
+            }
+            Card {
+                Row {
+                    label: @tr("Write hosts entries");
+                    hint: @tr("Lets PHP and Node reach your sites by name. Asks for administrator rights when sites change.");
+                    Switch {
+                        checked: Backend.manage-hosts;
+                        accessible-label: @tr("Write hosts entries");
+                        toggled => {
+                            Backend.set-manage-hosts(self.checked);
+                        }
+                    }
+                }
+                Row {
+                    label: @tr("Allow access from the local network");
+                    hint: @tr("For testing on a phone. Databases stay private.");
+                    Switch {
+                        checked: Backend.lan-access;
+                        accessible-label: @tr("Allow access from the local network");
+                        toggled => {
+                            Backend.set-lan(self.checked);
+                        }
+                    }
+                }
+                if Backend.defender-available: Row {
+                    label: @tr("Speed up first page loads");
+                    hint: @tr("Excludes MeowServer and your project folders from Microsoft Defender scanning. Asks for administrator rights once.");
+                    Button {
+                        text: @tr("Exclude folders");
+                        enabled: !Backend.busy;
+                        clicked => {
+                            Backend.defender-exclude();
+                        }
+                    }
+                }
+            }
+            Card {
+                Row {
+                    label: @tr("Something wrong?");
+                    hint: @tr("Opens a GitHub issue filled with MeowServer's version and recent log. You review it before sending; your sites' logs are not included.");
+                    Button {
+                        text: @tr("Report a problem");
+                        clicked => {
+                            Backend.report-problem();
+                        }
+                    }
+                }
+            }
+            Card {
+                Text {
+                    text: @tr("About");
+                    font-weight: 600;
+                }
+                Text {
+                    text: "MeowServer " + Backend.version;
+                }
+                Text {
+                    text: Backend.attribution;
+                    wrap: word-wrap;
+                }
+                Text {
+                    text: @tr("Free software under the GNU GPL 3.0 or later, with the attribution term in NOTICE. No warranty.");
+                    wrap: word-wrap;
+                    color: Theme.muted;
+                }
+                HorizontalLayout {
+                    spacing: 16px;
+                    alignment: start;
+                    Link {
+                        text: "pustekno.id";
+                        clicked => {
+                            Backend.open-url("https://pustekno.id");
+                        }
+                    }
+                    Link {
+                        text: "puskomedia.id";
+                        clicked => {
+                            Backend.open-url("https://www.puskomedia.id");
+                        }
+                    }
+                    Link {
+                        text: @tr("Source code");
+                        clicked => {
+                            Backend.open-url("https://github.com/pustekno/meowserver");
+                        }
+                    }
+                }
+                Text {
+                    text: Backend.root-dir;
+                    color: Theme.muted;
+                    overflow: elide;
+                }
+            }
+        }
+    }
+}

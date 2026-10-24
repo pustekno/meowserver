@@ -1,0 +1,160 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 PT Pusat Teknologi Nusantara and PT Puskomedia Indonesia Kreatif
+// Additional terms under GPLv3 section 7(b) apply; see NOTICE.
+
+// Everything the pages show and every action they can take. Rust fills the
+// properties and implements the callbacks (src/main.rs).
+
+export struct ServiceRow {
+    unit: string,
+    name: string,
+    version: string,
+    port: string,
+    state: string,
+    running: bool,
+    failed: bool,
+    installed: bool,
+}
+
+export struct SiteRow {
+    name: string,
+    host: string,
+    url: string,
+    folder: string,
+    php: string,
+    php-index: int,
+    source: string,
+    framework: string,
+    removable: bool,
+    proxy: bool,
+}
+
+export struct VersionRow {
+    version: string,
+    active: bool,
+    installed: bool,
+    verified: bool,
+}
+
+export struct CheckRow {
+    name: string,
+    ok: bool,
+    detail: string,
+    fix: string,
+}
+
+export struct ExtRow {
+    name: string,
+    enabled: bool,
+}
+
+export struct SettingRow {
+    key: string,
+    label: string,
+    value: string,
+}
+
+export struct DbRow {
+    unit: string,
+    name: string,
+    version: string,
+    port: string,
+    running: bool,
+    data-dir: string,
+    user: string,
+}
+
+export global Backend {
+    // Status line and errors.
+    in property <string> headline;
+    in property <bool> any-running;
+    in property <bool> busy;
+    in property <string> message;
+    in property <bool> message-is-error;
+
+    // Home.
+    in property <[ServiceRow]> services;
+    in property <[CheckRow]> problems;
+    in property <bool> needs-setup;
+    in property <bool> laragon-found;
+    in property <string> localhost-url;
+    in property <string> setup-progress;
+
+    // Sites.
+    in property <[SiteRow]> sites;
+    in property <[string]> php-choices;
+    in-out property <string> site-filter;
+    in property <bool> adding;
+    in-out property <string> add-path;
+    in-out property <string> add-name;
+    in property <string> add-preview;
+    in property <string> add-error;
+
+    // Versions.
+    in property <[string]> kinds;
+    in-out property <int> kind-index;
+    in property <[VersionRow]> installed-versions;
+    in property <[VersionRow]> available-versions;
+    in property <bool> loading-available;
+    in property <string> install-progress;
+
+    // PHP.
+    in property <[string]> php-versions;
+    in-out property <int> php-index;
+    in property <[ExtRow]> extensions;
+    in property <[SettingRow]> ini-settings;
+
+    // Databases.
+    in property <[DbRow]> databases;
+
+    // Settings.
+    in property <int> language-index;
+    in property <int> suffix-index;
+    in property <int> web-index;
+    in property <bool> lan-access;
+    in property <bool> manage-hosts;
+    in property <bool> defender-available;
+    in property <string> version;
+    in property <string> attribution;
+    in property <string> root-dir;
+
+    callback start-all();
+    callback stop-all();
+    callback toggle-unit(string);
+    callback open-url(string);
+    callback open-path(string);
+    callback open-terminal(string);
+    callback dismiss-message();
+
+    callback quick-setup();
+    callback import-laragon();
+
+    callback search(string);
+    callback pick-folder();
+    callback add-name-edited(string);
+    callback confirm-add();
+    callback cancel-add();
+    callback remove-site(string);
+    callback set-site-php(string, string);
+
+    callback select-kind(int);
+    callback load-available();
+    callback install-version(string);
+    callback use-version(string);
+    callback uninstall-version(string);
+
+    callback select-php(int);
+    callback toggle-extension(string, bool);
+    callback set-ini(string, string);
+    callback save-php();
+
+    callback set-language(int);
+    callback set-suffix(int);
+    callback set-web(int);
+    callback set-lan(bool);
+    callback set-manage-hosts(bool);
+    callback defender-exclude();
+    callback run-doctor();
+    callback report-problem();
+    callback open-logs();
+}

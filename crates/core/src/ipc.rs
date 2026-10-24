@@ -104,6 +104,33 @@ impl Client {
     }
 }
 
+/// Connects to `meowd`, starting it first if needed. `meowd` is looked for
+/// next to the running executable (all three ship together).
+pub fn ensure_running(layout: &Layout, headless: bool) -> Result<Client> {
+    if let Ok(client) = Client::connect(layout) {
+        return Ok(client);
+    }
+    let meowd = std::env::current_exe()?.with_file_name(format!("meowd{}", std::env::consts::EXE_SUFFIX));
+    let mut cmd = std::process::Command::new(&meowd);
+    if headless {
+        cmd.arg("--headless");
+    }
+    cmd.stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+    crate::platform::spawn_detached(&mut cmd).with_context(|| format!("cannot start {}", meowd.display()))?;
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    loop {
+        if let Ok(client) = Client::connect(layout) {
+            return Ok(client);
+        }
+        if std::time::Instant::now() > deadline {
+            bail!("MeowServer did not start; see {}", layout.logs().join("meowd.log").display());
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+}
+
 pub type Handler = Arc<dyn Fn(Request) -> Response + Send + Sync>;
 
 /// Starts serving requests on a background thread. Fails if another

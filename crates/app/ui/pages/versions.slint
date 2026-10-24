@@ -1,0 +1,120 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 PT Pusat Teknologi Nusantara and PT Puskomedia Indonesia Kreatif
+// Additional terms under GPLv3 section 7(b) apply; see NOTICE.
+
+// Versions (PRD F2, F3): installed, active, and downloadable versions.
+
+import { Button, ComboBox, ScrollView } from "std-widgets.slint";
+import { Backend } from "../backend.slint";
+import { Card, PageHeader, Theme } from "../widgets.slint";
+
+export component VersionsPage inherits VerticalLayout {
+    spacing: Theme.gap;
+
+    PageHeader {
+        title: @tr("Versions");
+        subtitle: @tr("Downloads come from each project's official source.");
+        ComboBox {
+            width: 160px;
+            model: Backend.kinds;
+            current-index <=> Backend.kind-index;
+            accessible-label: @tr("Service");
+            selected => {
+                Backend.select-kind(self.current-index);
+            }
+        }
+    }
+
+    if Backend.install-progress != "": Text {
+        text: Backend.install-progress;
+        color: Theme.muted;
+        wrap: word-wrap;
+    }
+
+    sv := ScrollView {
+        VerticalLayout {
+            width: sv.visible-width;
+            spacing: Theme.gap;
+            alignment: start;
+            Card {
+                Text {
+                    text: @tr("Installed");
+                    font-weight: 600;
+                }
+                if Backend.installed-versions.length == 0: Text {
+                    text: @tr("None installed.");
+                    color: Theme.muted;
+                }
+                for v in Backend.installed-versions: HorizontalLayout {
+                    spacing: 10px;
+                    height: 34px;
+                    Text {
+                        text: v.version;
+                        vertical-alignment: center;
+                        width: 120px;
+                        font-weight: v.active ? 600 : 400;
+                    }
+                    Text {
+                        text: v.active ? @tr("active") : "";
+                        vertical-alignment: center;
+                        color: Theme.ok;
+                        horizontal-stretch: 1;
+                    }
+                    Button {
+                        text: @tr("Use");
+                        enabled: !v.active && !Backend.busy;
+                        clicked => {
+                            Backend.use-version(v.version);
+                        }
+                    }
+                    Button {
+                        text: @tr("Remove");
+                        enabled: !v.active && !Backend.busy;
+                        clicked => {
+                            Backend.uninstall-version(v.version);
+                        }
+                    }
+                }
+            }
+            Card {
+                HorizontalLayout {
+                    Text {
+                        text: @tr("Available");
+                        font-weight: 600;
+                        horizontal-stretch: 1;
+                        vertical-alignment: center;
+                    }
+                    Button {
+                        text: Backend.loading-available ? @tr("Loading…") : @tr("Check for versions");
+                        enabled: !Backend.loading-available;
+                        clicked => {
+                            Backend.load-available();
+                        }
+                    }
+                }
+                for v in Backend.available-versions: HorizontalLayout {
+                    spacing: 10px;
+                    height: 34px;
+                    Text {
+                        text: v.version;
+                        vertical-alignment: center;
+                        width: 120px;
+                    }
+                    Text {
+                        text: v.verified ? "" : @tr("no official checksum");
+                        vertical-alignment: center;
+                        color: Theme.muted;
+                        horizontal-stretch: 1;
+                    }
+                    Button {
+                        text: v.installed ? @tr("Installed") : @tr("Install");
+                        enabled: !v.installed && !Backend.busy;
+                        clicked => {
+                            Backend.install-version(v.version);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

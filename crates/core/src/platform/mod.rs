@@ -81,6 +81,11 @@ pub fn open(target: &std::ffi::OsStr) -> std::io::Result<()> {
     spawn_detached(&mut cmd).map(drop)
 }
 
+/// The user's language as a two-letter code (`en`, `id`, …).
+pub fn language() -> String {
+    imp::locale().split(['-', '_', '.']).next().unwrap_or("en").to_ascii_lowercase()
+}
+
 pub const EXE_SUFFIX: &str = std::env::consts::EXE_SUFFIX;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

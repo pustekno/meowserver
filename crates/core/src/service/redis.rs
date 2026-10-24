@@ -4,8 +4,6 @@
 
 //! Redis (PRD S5): no authentication, loopback only, nothing persisted.
 
-use std::path::PathBuf;
-
 use anyhow::{Result, bail};
 use serde::Serialize;
 
@@ -22,8 +20,7 @@ struct Context {
     version: String,
     bind: &'static str,
     port: u16,
-    data_dir: PathBuf,
-    custom_conf: Option<PathBuf>,
+    custom: Option<String>,
 }
 
 pub fn plan(layout: &Layout, config: &Config) -> Result<ProcessSpec> {
@@ -32,22 +29,28 @@ pub fn plan(layout: &Layout, config: &Config) -> Result<ProcessSpec> {
     };
     let data = layout.data().join("redis");
     std::fs::create_dir_all(&data)?;
-    let custom = layout.custom().join("redis").join("redis.conf");
+    // The Windows build (msys2) misreads absolute Windows paths, so Redis
+    // runs inside its data folder and every path it sees is relative, and
+    // user overrides are copied in rather than included.
+    let custom = std::fs::read_to_string(layout.custom().join("redis").join("redis.conf")).ok();
     let ctx = Context {
         version: installed.version.to_string(),
         bind: "127.0.0.1 ::1",
         port: config.port("redis", DEFAULT_PORT),
-        data_dir: data,
-        custom_conf: custom.exists().then_some(custom),
+        custom,
     };
     let conf = layout.generated().join("redis").join("redis.conf");
     write_generated(&conf, &template::render("redis/redis.conf", ctx)?)?;
+    // data/redis → ../../etc/generated/redis/redis.conf
+    let relative =
+        std::path::Path::new("..").join("..").join("etc").join("generated").join("redis").join("redis.conf");
+    let relative = relative.to_string_lossy().replace('\\', "/");
     Ok(ProcessSpec {
         id: "redis".into(),
         program: installed.exe("redis-server"),
-        args: vec![conf.into()],
+        args: vec![relative.into()],
         env: Vec::new(),
-        cwd: Some(installed.dir.clone()),
+        cwd: Some(data),
         log: layout.logs().join("redis.log"),
         restart: Restart::OnFailure,
         graceful_stop: None,

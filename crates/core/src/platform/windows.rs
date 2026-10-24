@@ -158,6 +158,14 @@ fn resume_threads(pid: u32) -> io::Result<()> {
     Ok(())
 }
 
+/// The user's locale name, e.g. `id-ID`.
+pub fn locale() -> String {
+    use windows_sys::Win32::Globalization::GetUserDefaultLocaleName;
+    let mut buf = [0u16; 85];
+    let len = unsafe { GetUserDefaultLocaleName(buf.as_mut_ptr(), buf.len() as i32) };
+    if len <= 1 { "en".into() } else { String::from_utf16_lossy(&buf[..len as usize - 1]) }
+}
+
 /// Every process listening on a TCP port, on any IPv4 or IPv6 address.
 pub fn listener_pids(port: u16) -> Vec<u32> {
     use windows_sys::Win32::NetworkManagement::IpHelper::{

@@ -1,0 +1,100 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 PT Pusat Teknologi Nusantara and PT Puskomedia Indonesia Kreatif
+// Additional terms under GPLv3 section 7(b) apply; see NOTICE.
+
+// Small building blocks shared by the pages.
+
+import { Palette } from "std-widgets.slint";
+
+export global Theme {
+    out property <color> accent: #ea7a1a;
+    out property <color> ok: #2e9e5b;
+    out property <color> bad: #d64545;
+    out property <color> muted: Palette.foreground.with-alpha(0.6);
+    out property <color> card: Palette.color-scheme == ColorScheme.dark ? #ffffff0d : #00000008;
+    out property <length> radius: 8px;
+    out property <length> gap: 12px;
+}
+
+export component PageHeader inherits HorizontalLayout {
+    in property <string> title;
+    in property <string> subtitle;
+    spacing: Theme.gap;
+    VerticalLayout {
+        alignment: start;
+        horizontal-stretch: 1;
+        Text {
+            text: root.title;
+            font-size: 20px;
+            font-weight: 700;
+        }
+        if root.subtitle != "": Text {
+            text: root.subtitle;
+            color: Theme.muted;
+            wrap: word-wrap;
+        }
+    }
+    @children
+}
+
+export component Card inherits Rectangle {
+    background: Theme.card;
+    border-radius: Theme.radius;
+    border-width: 1px;
+    border-color: Palette.border;
+    VerticalLayout {
+        padding: 14px;
+        spacing: 8px;
+        @children
+    }
+}
+
+export component Dot inherits Rectangle {
+    in property <bool> on;
+    in property <bool> failed;
+    width: 10px;
+    height: 10px;
+    border-radius: 5px;
+    background: root.failed ? Theme.bad : root.on ? Theme.ok : Palette.border;
+}
+
+export component Link inherits Text {
+    callback clicked();
+    color: Theme.accent;
+    TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+export component NavItem inherits Rectangle {
+    in property <string> label;
+    in property <bool> active;
+    callback clicked();
+    height: 36px;
+    border-radius: 6px;
+    background: root.active ? Theme.accent.with-alpha(0.15) : touch.has-hover ? Theme.card : transparent;
+    accessible-role: button;
+    accessible-label: root.label;
+    accessible-action-default => {
+        root.clicked();
+    }
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 12px;
+        Text {
+            text: root.label;
+            vertical-alignment: center;
+            font-weight: root.active ? 600 : 400;
+            color: root.active ? Theme.accent : Palette.foreground;
+        }
+    }
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            root.clicked();
+        }
+    }
+}

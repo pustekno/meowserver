@@ -66,9 +66,12 @@ These come from the PRD (§11) and are checked in review:
 
 ## Translations
 
-GUI strings live in `locales/<lang>.ftl` ([Fluent](https://projectfluent.org/)
-format). To add a language, copy `en.ftl`, translate the values, and open a
-pull request.
+GUI texts are written in English in `crates/app/ui/*.slint` with `@tr("…")`.
+Translations are gettext files in `locales/<lang>/LC_MESSAGES/meow-app.po`
+and are compiled into the binary. To add a language, copy
+`locales/id/LC_MESSAGES/meow-app.po` to your language code, translate every
+`msgstr`, and open a pull request. A handful of status texts built in Rust are
+in `crates/app/src/tr.rs`.
 
 ## Code from other projects
 

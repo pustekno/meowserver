@@ -1,0 +1,81 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 PT Pusat Teknologi Nusantara and PT Puskomedia Indonesia Kreatif
+// Additional terms under GPLv3 section 7(b) apply; see NOTICE.
+
+// PHP (PRD F20, F21): extensions and common php.ini settings.
+
+import { Button, CheckBox, ComboBox, LineEdit, ScrollView } from "std-widgets.slint";
+import { Backend } from "../backend.slint";
+import { Card, PageHeader, Theme } from "../widgets.slint";
+
+export component PhpPage inherits VerticalLayout {
+    spacing: Theme.gap;
+
+    PageHeader {
+        title: @tr("PHP");
+        subtitle: @tr("Settings apply to every PHP version. Other options go in etc/custom/php/.");
+        ComboBox {
+            width: 140px;
+            model: Backend.php-versions;
+            current-index <=> Backend.php-index;
+            accessible-label: @tr("PHP version");
+            selected => {
+                Backend.select-php(self.current-index);
+            }
+        }
+        Button {
+            text: @tr("Save and apply");
+            primary: true;
+            enabled: !Backend.busy;
+            clicked => {
+                Backend.save-php();
+            }
+        }
+    }
+
+    sv := ScrollView {
+        VerticalLayout {
+            width: sv.visible-width;
+            spacing: Theme.gap;
+            alignment: start;
+            Card {
+                Text {
+                    text: @tr("Settings");
+                    font-weight: 600;
+                }
+                for s in Backend.ini-settings: HorizontalLayout {
+                    spacing: 10px;
+                    Text {
+                        text: s.label;
+                        vertical-alignment: center;
+                        width: 220px;
+                    }
+                    LineEdit {
+                        text: s.value;
+                        accessible-label: s.label;
+                        edited(text) => {
+                            Backend.set-ini(s.key, text);
+                        }
+                    }
+                }
+            }
+            Card {
+                Text {
+                    text: @tr("Extensions");
+                    font-weight: 600;
+                }
+                if Backend.extensions.length == 0: Text {
+                    text: @tr("This PHP build has its extensions compiled in.");
+                    color: Theme.muted;
+                }
+                for e in Backend.extensions: CheckBox {
+                    text: e.name;
+                    checked: e.enabled;
+                    toggled => {
+                        Backend.toggle-extension(e.name, self.checked);
+                    }
+                }
+            }
+        }
+    }
+}

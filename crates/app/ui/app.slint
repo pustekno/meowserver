@@ -1,0 +1,106 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 PT Pusat Teknologi Nusantara and PT Puskomedia Indonesia Kreatif
+// Additional terms under GPLv3 section 7(b) apply; see NOTICE.
+
+// The MeowServer window (PRD §6.2): a sidebar and one page at a time.
+
+import { Palette } from "std-widgets.slint";
+import { Backend } from "backend.slint";
+import { Link, NavItem, Theme } from "widgets.slint";
+import { HomePage } from "pages/home.slint";
+import { SitesPage } from "pages/sites.slint";
+import { VersionsPage } from "pages/versions.slint";
+import { PhpPage } from "pages/php.slint";
+import { DatabasesPage } from "pages/databases.slint";
+import { SettingsPage } from "pages/settings.slint";
+
+export { Backend }
+
+export component AppWindow inherits Window {
+    in property <image> window-icon;
+    in-out property <int> page: 0;
+    callback page-changed(int);
+
+    title: "MeowServer";
+    icon: root.window-icon;
+    preferred-width: 1000px;
+    preferred-height: 660px;
+    min-width: 780px;
+    min-height: 480px;
+    background: Palette.background;
+
+    HorizontalLayout {
+        Rectangle {
+            width: 200px;
+            background: Theme.card;
+            VerticalLayout {
+                padding: 12px;
+                spacing: 4px;
+                HorizontalLayout {
+                    spacing: 8px;
+                    padding-bottom: 12px;
+                    Image {
+                        source: root.window-icon;
+                        width: 28px;
+                        height: 28px;
+                    }
+                    Text {
+                        text: "MeowServer";
+                        font-size: 17px;
+                        font-weight: 700;
+                        vertical-alignment: center;
+                    }
+                }
+                for item[i] in [@tr("Home"), @tr("Sites"), @tr("Versions"), @tr("PHP"), @tr("Databases"), @tr("Settings")]: NavItem {
+                    label: item;
+                    active: root.page == i;
+                    clicked => {
+                        root.page = i;
+                        root.page-changed(i);
+                    }
+                }
+                Rectangle { }
+                Text {
+                    text: Backend.headline;
+                    color: Theme.muted;
+                    wrap: word-wrap;
+                    font-size: 12px;
+                }
+            }
+        }
+
+        VerticalLayout {
+            padding: 20px;
+            spacing: 12px;
+            horizontal-stretch: 1;
+
+            if Backend.message != "": Rectangle {
+                border-radius: Theme.radius;
+                background: Backend.message-is-error ? Theme.bad.with-alpha(0.12) : Theme.ok.with-alpha(0.12);
+                HorizontalLayout {
+                    padding: 10px;
+                    spacing: 10px;
+                    Text {
+                        text: Backend.message;
+                        wrap: word-wrap;
+                        horizontal-stretch: 1;
+                        color: Backend.message-is-error ? Theme.bad : Palette.foreground;
+                    }
+                    Link {
+                        text: @tr("Dismiss");
+                        clicked => {
+                            Backend.dismiss-message();
+                        }
+                    }
+                }
+            }
+
+            if root.page == 0: HomePage { }
+            if root.page == 1: SitesPage { }
+            if root.page == 2: VersionsPage { }
+            if root.page == 3: PhpPage { }
+            if root.page == 4: DatabasesPage { }
+            if root.page == 5: SettingsPage { }
+        }
+    }
+}

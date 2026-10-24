@@ -54,6 +54,14 @@ pub fn spawn_detached(cmd: &mut Command) -> io::Result<Child> {
     cmd.spawn()
 }
 
+/// The user's locale from the environment, e.g. `id_ID.UTF-8`.
+pub fn locale() -> String {
+    ["LC_ALL", "LC_MESSAGES", "LANG"]
+        .iter()
+        .find_map(|v| std::env::var(v).ok().filter(|s| !s.is_empty() && s != "C" && s != "POSIX"))
+        .unwrap_or_else(|| "en".into())
+}
+
 pub fn spawn_console(cmd: &mut Command) -> io::Result<Child> {
     spawn_detached(cmd)
 }

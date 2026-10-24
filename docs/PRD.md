@@ -318,8 +318,9 @@ installed one. Not bundled.
 
 **F34 — Languages.** GUI in English and Indonesian, switchable in Settings and
 offered on first run. The initial choice follows the OS language when a
-translation exists, otherwise English. Translation files are plain text so others
-can add languages. The CLI is English only.
+translation exists, otherwise English. Translations are gettext `.po` files
+(Slint's built-in mechanism), bundled into the binary, so others can add
+languages with any `.po` editor. The CLI is English only.
 
 **F35 — CLI.** `meow` covers every GUI feature (§13).
 
@@ -936,7 +937,7 @@ meowserver/
 ├── data/
 │   └── mysql-versions.toml    # the only hand-curated version list (§9.5)
 ├── assets/                    # icons, logo
-├── locales/                   # en.ftl, id.ftl
+├── locales/                   # <lang>/LC_MESSAGES/meow-app.po (gettext, bundled by Slint)
 ├── packaging/
 │   ├── windows/               # installer + portable .zip
 │   ├── macos/                 # .app bundle, .dmg
@@ -968,7 +969,7 @@ Rules:
   non-Rust contributors can fix them.
 - A change in an upstream format may only affect one file in `provider/`.
 - English everywhere in the repo: code, comments, commit messages, docs.
-  Exceptions: `locales/id.ftl` and `README.id.md`.
+  Exceptions: `locales/id/…/meow-app.po` and `README.id.md`.
 
 ## 12. On-disk layout
 

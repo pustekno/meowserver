@@ -1,0 +1,178 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 PT Pusat Teknologi Nusantara and PT Puskomedia Indonesia Kreatif
+// Additional terms under GPLv3 section 7(b) apply; see NOTICE.
+
+// Home (PRD §6.2): services, Start/Stop All, problems found by Doctor, and
+// the first-run setup when nothing is installed yet (PRD §6.1).
+
+import { Button, Switch, ScrollView } from "std-widgets.slint";
+import { Backend } from "../backend.slint";
+import { Card, Dot, Link, PageHeader, Theme } from "../widgets.slint";
+
+export component HomePage inherits VerticalLayout {
+    spacing: Theme.gap;
+
+    PageHeader {
+        title: @tr("Home");
+        subtitle: Backend.headline;
+        Button {
+            text: @tr("Start All");
+            primary: true;
+            enabled: !Backend.busy;
+            clicked => {
+                Backend.start-all();
+            }
+        }
+        Button {
+            text: @tr("Stop All");
+            enabled: !Backend.busy && Backend.any-running;
+            clicked => {
+                Backend.stop-all();
+            }
+        }
+    }
+
+    sv := ScrollView {
+        VerticalLayout {
+            width: sv.visible-width;
+            spacing: Theme.gap;
+            alignment: start;
+
+            if Backend.needs-setup: Card {
+                Text {
+                    text: @tr("Welcome to MeowServer");
+                    font-size: 16px;
+                    font-weight: 600;
+                }
+                Text {
+                    text: @tr("Nothing is installed yet. The recommended stack is Caddy, the newest PHP, and MySQL 8.4, downloaded from their official sources.");
+                    wrap: word-wrap;
+                }
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    Button {
+                        text: @tr("Install recommended stack");
+                        primary: true;
+                        enabled: !Backend.busy;
+                        clicked => {
+                            Backend.quick-setup();
+                        }
+                    }
+                    if Backend.laragon-found: Button {
+                        text: @tr("Import from Laragon");
+                        enabled: !Backend.busy;
+                        clicked => {
+                            Backend.import-laragon();
+                        }
+                    }
+                }
+                if Backend.setup-progress != "": Text {
+                    text: Backend.setup-progress;
+                    color: Theme.muted;
+                    wrap: word-wrap;
+                }
+            }
+
+            Card {
+                Text {
+                    text: @tr("Services");
+                    font-weight: 600;
+                }
+                for s in Backend.services: HorizontalLayout {
+                    spacing: 10px;
+                    height: 34px;
+                    Dot {
+                        on: s.running;
+                        failed: s.failed;
+                        y: (parent.height - self.height) / 2;
+                    }
+                    Text {
+                        text: s.name;
+                        vertical-alignment: center;
+                        width: 120px;
+                        font-weight: 500;
+                    }
+                    Text {
+                        text: s.installed ? s.version : @tr("not installed");
+                        vertical-alignment: center;
+                        width: 90px;
+                        color: Theme.muted;
+                    }
+                    Text {
+                        text: s.port;
+                        vertical-alignment: center;
+                        width: 70px;
+                        color: Theme.muted;
+                    }
+                    Text {
+                        text: s.state;
+                        vertical-alignment: center;
+                        horizontal-stretch: 1;
+                        overflow: elide;
+                        color: s.failed ? Theme.bad : Theme.muted;
+                    }
+                    Switch {
+                        enabled: s.installed && !Backend.busy;
+                        checked: s.running;
+                        accessible-label: s.name;
+                        toggled => {
+                            Backend.toggle-unit(s.unit);
+                        }
+                    }
+                }
+                HorizontalLayout {
+                    spacing: 16px;
+                    alignment: start;
+                    Link {
+                        text: @tr("Open localhost");
+                        clicked => {
+                            Backend.open-url(Backend.localhost-url);
+                        }
+                    }
+                    Link {
+                        text: @tr("Terminal");
+                        clicked => {
+                            Backend.open-terminal("");
+                        }
+                    }
+                    Link {
+                        text: @tr("Logs");
+                        clicked => {
+                            Backend.open-logs();
+                        }
+                    }
+                }
+            }
+
+            if Backend.problems.length > 0: Card {
+                HorizontalLayout {
+                    Text {
+                        text: @tr("Things to check");
+                        font-weight: 600;
+                        horizontal-stretch: 1;
+                    }
+                    Link {
+                        text: @tr("Check again");
+                        clicked => {
+                            Backend.run-doctor();
+                        }
+                    }
+                }
+                for p in Backend.problems: VerticalLayout {
+                    spacing: 2px;
+                    Text {
+                        text: p.name + ": " + p.detail;
+                        wrap: word-wrap;
+                        color: Theme.bad;
+                    }
+                    if p.fix != "": Text {
+                        text: @tr("Fix: {}", p.fix);
+                        wrap: word-wrap;
+                        color: Theme.muted;
+                    }
+                }
+            }
+        }
+    }
+}

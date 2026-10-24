@@ -1,0 +1,69 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 PT Pusat Teknologi Nusantara and PT Puskomedia Indonesia Kreatif
+// Additional terms under GPLv3 section 7(b) apply; see NOTICE.
+
+// Databases (PRD §6.2): status, connection details, data folders.
+
+import { Button, ScrollView } from "std-widgets.slint";
+import { Backend } from "../backend.slint";
+import { Card, Dot, PageHeader, Theme } from "../widgets.slint";
+
+export component DatabasesPage inherits VerticalLayout {
+    spacing: Theme.gap;
+
+    PageHeader {
+        title: @tr("Databases");
+        subtitle: @tr("Reachable from this computer only. Default user without a password.");
+    }
+
+    if Backend.databases.length == 0: Text {
+        text: @tr("No database server installed. Install MySQL, MariaDB, or PostgreSQL on the Versions page.");
+        color: Theme.muted;
+        wrap: word-wrap;
+    }
+
+    sv := ScrollView {
+        VerticalLayout {
+            width: sv.visible-width;
+            spacing: Theme.gap;
+            alignment: start;
+            for db in Backend.databases: Card {
+                HorizontalLayout {
+                    spacing: 10px;
+                    Dot {
+                        on: db.running;
+                        y: (parent.height - self.height) / 2;
+                    }
+                    Text {
+                        text: db.name + " " + db.version;
+                        font-weight: 600;
+                        vertical-alignment: center;
+                        horizontal-stretch: 1;
+                    }
+                    Button {
+                        text: db.running ? @tr("Stop") : @tr("Start");
+                        enabled: !Backend.busy;
+                        clicked => {
+                            Backend.toggle-unit(db.unit);
+                        }
+                    }
+                    Button {
+                        text: @tr("Data folder");
+                        clicked => {
+                            Backend.open-path(db.data-dir);
+                        }
+                    }
+                }
+                Text {
+                    text: @tr("Host 127.0.0.1, port {}, user {}", db.port, db.user);
+                    color: Theme.muted;
+                }
+                Text {
+                    text: db.data-dir;
+                    color: Theme.muted;
+                    overflow: elide;
+                }
+            }
+        }
+    }
+}

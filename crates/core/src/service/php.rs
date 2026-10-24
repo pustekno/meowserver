@@ -250,6 +250,27 @@ const DEFAULT_SETTINGS: &[(&str, &str)] = &[
     ("opcache.revalidate_freq", "0"),
 ];
 
+/// MeowServer's default for a php.ini setting, if it sets one.
+pub fn default_setting(key: &str) -> Option<&'static str> {
+    DEFAULT_SETTINGS.iter().find(|(k, _)| *k == key).map(|(_, v)| *v)
+}
+
+/// Extensions a Windows PHP build ships as DLLs in `ext/`, by name.
+pub fn available_extensions(installed: &Installed) -> Vec<String> {
+    let Ok(entries) = std::fs::read_dir(installed.dir.join("ext")) else { return Vec::new() };
+    let mut names: Vec<String> = entries
+        .filter_map(Result::ok)
+        .filter_map(|e| {
+            let name = e.file_name().to_string_lossy().into_owned();
+            let ext = name.strip_prefix("php_")?.strip_suffix(".dll")?.to_owned();
+            // OPcache is always on and managed separately.
+            (ext != "opcache").then_some(ext)
+        })
+        .collect();
+    names.sort();
+    names
+}
+
 fn render_ini(layout: &Layout, config: &Config, installed: &Installed) -> Result<String> {
     // Windows builds load extensions from ext/; static builds have them
     // compiled in, so there is nothing to list.
