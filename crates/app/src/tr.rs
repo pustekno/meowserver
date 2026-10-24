@@ -40,6 +40,7 @@ pub fn t(text: &str) -> String {
         "Added" => "Ditambahkan",
         "Created" => "Dibuat",
         "Saved" => "Disimpan",
+        "Stopping all services…" => "Menghentikan semua layanan…",
         "looking for versions…" => "mencari versi…",
         "of" => "dari",
         "Starting…" => "Menjalankan…",

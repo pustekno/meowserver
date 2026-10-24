@@ -4,7 +4,7 @@
 
 // The MeowServer window (PRD §6.2): a sidebar and one page at a time.
 
-import { Palette, Spinner } from "std-widgets.slint";
+import { Button, Palette, Spinner } from "std-widgets.slint";
 import { Backend } from "backend.slint";
 import { Link, NavItem, Theme } from "widgets.slint";
 import { HomePage } from "pages/home.slint";
@@ -65,6 +65,19 @@ export component AppWindow inherits Window {
                     color: Theme.muted;
                     wrap: word-wrap;
                     font-size: 12px;
+                }
+                Button {
+                    text: @tr("Quit MeowServer");
+                    enabled: !Backend.busy;
+                    clicked => {
+                        Backend.quit-all();
+                    }
+                }
+                Text {
+                    text: @tr("Closing this window keeps your sites running in the tray. Quit stops everything.");
+                    color: Theme.muted;
+                    wrap: word-wrap;
+                    font-size: 11px;
                 }
             }
         }

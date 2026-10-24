@@ -110,6 +110,19 @@ pub fn reload(layout: &Layout) {
     }
 }
 
+/// Stops every service and exits `meowd`, waiting until it is gone.
+pub fn quit(layout: &Layout) {
+    let Ok(mut client) = Client::connect(layout) else { return };
+    let _ = client.call(Request::Shutdown);
+    drop(client);
+    for _ in 0..300 {
+        if Client::connect(layout).is_err() {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(200));
+    }
+}
+
 pub fn call(layout: &Layout, request: Request) -> Result<()> {
     ipc::ensure_running(layout, false)?.call(request).map(drop)
 }

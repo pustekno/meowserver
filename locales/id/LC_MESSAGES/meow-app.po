@@ -305,3 +305,9 @@ msgstr "Cari ekstensi"
 
 msgid "No extension matches."
 msgstr "Tidak ada ekstensi yang cocok."
+
+msgid "Quit MeowServer"
+msgstr "Keluar dari MeowServer"
+
+msgid "Closing this window keeps your sites running in the tray. Quit stops everything."
+msgstr "Menutup jendela ini membuat situs tetap jalan di tray. Keluar menghentikan semuanya."

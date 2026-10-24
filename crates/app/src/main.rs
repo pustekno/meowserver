@@ -197,6 +197,23 @@ fn wire(window: &AppWindow, ui: &Ui) {
         let ui = ui.clone();
         move || ui.run(|l, _| actions::call(l, Request::StartAll).map(|()| String::new()))
     });
+    b.on_quit_all({
+        let ui = ui.clone();
+        move || {
+            ui.on_ui(|w| {
+                let b = w.global::<Backend>();
+                b.set_busy(true);
+                b.set_task(t("Stopping all services…").into());
+            });
+            let layout = ui.layout.clone();
+            std::thread::spawn(move || {
+                actions::quit(&layout);
+                let _ = slint::invoke_from_event_loop(|| {
+                    let _ = slint::quit_event_loop();
+                });
+            });
+        }
+    });
     b.on_stop_all({
         let ui = ui.clone();
         move || ui.run(|l, _| actions::call(l, Request::StopAll).map(|()| String::new()))

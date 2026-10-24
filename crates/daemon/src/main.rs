@@ -243,9 +243,12 @@ fn serve_ipc(
                 Response::ok(())
             }
             other => {
+                let changes = !matches!(other, Request::Status);
                 let response = proxy_engine.handle(other);
-                let engine = proxy_engine.clone();
-                std::thread::spawn(move || sync_hosts(&engine));
+                if changes {
+                    let engine = proxy_engine.clone();
+                    std::thread::spawn(move || sync_hosts(&engine));
+                }
                 response
             }
         }),

@@ -85,9 +85,31 @@ pub fn render(current: &str, hosts: &[String]) -> String {
     out
 }
 
+/// True when MeowServer's block already lists exactly `wanted`. Only the
+/// block is compared, so how the rest of the file is formatted (trailing
+/// blank lines, a missing final newline) never triggers a rewrite and an
+/// elevation prompt.
 pub fn is_current(layout: &Layout, config: &Config) -> bool {
     let current = std::fs::read_to_string(path()).unwrap_or_default();
-    render(&current, &wanted(layout, config)) == current
+    let wanted = if config.general.manage_hosts { wanted(layout, config) } else { Vec::new() };
+    block_hosts(&current) == wanted
+}
+
+/// Host names inside MeowServer's block, sorted, without duplicates.
+fn block_hosts(text: &str) -> Vec<String> {
+    let mut inside = false;
+    let mut hosts = Vec::new();
+    for line in text.lines() {
+        match line.trim() {
+            l if l.starts_with("# BEGIN MeowServer") => inside = true,
+            "# END MeowServer" => inside = false,
+            l if inside => hosts.extend(l.split_whitespace().nth(1).map(str::to_owned)),
+            _ => {}
+        }
+    }
+    hosts.sort();
+    hosts.dedup();
+    hosts
 }
 
 /// Writes the block. Must run with rights to change the hosts file.
@@ -121,7 +143,7 @@ pub enum Sync {
 pub fn sync(layout: &Layout, config: &Config, meow: &Path) -> Result<Sync> {
     let hosts = if config.general.manage_hosts { wanted(layout, config) } else { Vec::new() };
     let current = std::fs::read_to_string(path()).unwrap_or_default();
-    if render(&current, &hosts) == current {
+    if block_hosts(&current) == hosts {
         return Ok(Sync::UpToDate);
     }
     if write(&hosts).is_ok() {
@@ -159,6 +181,14 @@ mod tests {
         assert_eq!(render(&replaced, &["shop.localhost".into()]), replaced, "stable");
 
         assert_eq!(render(&replaced, &[]), original, "removing restores the original");
+    }
+
+    #[test]
+    fn formatting_outside_the_block_is_not_a_change() {
+        let untidy = "127.0.0.1 localhost\r\n\r\n\r\n";
+        assert!(block_hosts(untidy).is_empty(), "no block, no hosts: nothing to write");
+        let with = render(untidy, &["blog.localhost".into()]);
+        assert_eq!(block_hosts(&with), vec!["blog.localhost".to_owned()]);
     }
 
     #[test]
