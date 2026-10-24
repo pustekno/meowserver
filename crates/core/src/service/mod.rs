@@ -163,6 +163,24 @@ pub fn select(layout: &Layout, kind: Kind, selector: Option<&str>) -> Option<Ins
     all.into_iter().find(|i| i.version == best)
 }
 
+/// Before a new version of a database is installed, pin the one in use, so
+/// the newer one does not silently become active with an empty data folder.
+/// Moving data to it is an explicit step (`meow db upgrade`, PRD F25).
+pub fn pin_before_install(layout: &Layout, kind: Kind) -> anyhow::Result<()> {
+    if !matches!(kind, Kind::Mysql | Kind::Mariadb | Kind::Postgres) {
+        return Ok(());
+    }
+    let mut config = crate::config::Config::load(layout)?;
+    if config.version_selector(kind.id()).is_some() {
+        return Ok(());
+    }
+    if let Some(current) = select(layout, kind, None) {
+        config.versions.insert(kind.id().into(), datadir::line(kind, &current.version));
+        config.save(layout)?;
+    }
+    Ok(())
+}
+
 /// Writes a generated config file, creating its folder.
 pub(crate) fn write_generated(path: &Path, text: &str) -> anyhow::Result<()> {
     crate::config::write_atomic(path, text.as_bytes())

@@ -39,6 +39,7 @@ pub fn t(text: &str) -> String {
         "is no longer served. No files were touched." => "tidak lagi dilayani. Tidak ada file yang diubah.",
         "Added" => "Ditambahkan",
         "Created" => "Dibuat",
+        "Saved" => "Disimpan",
         "Trusted. Restart the browser if it was open." => {
             "Dipercaya. Mulai ulang browser jika sedang terbuka."
         }

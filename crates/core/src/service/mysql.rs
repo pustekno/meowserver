@@ -101,6 +101,45 @@ pub fn plan(layout: &Layout, config: &Config, kind: Kind) -> Result<ProcessSpec>
     })
 }
 
+/// After `meow db upgrade` moves MariaDB data to a newer version, the
+/// system tables need `mariadb-upgrade` (MySQL 8.0.16+ does this itself).
+/// Runs in the background once the server answers, only when the upgrade
+/// left its flag in the data folder.
+pub fn after_start(layout: &Layout, config: &Config, kind: Kind) {
+    if kind != Kind::Mariadb {
+        return;
+    }
+    let Some(installed) = super::select(layout, kind, config.version_selector(kind.id())) else { return };
+    let flag = datadir::path(layout, config, kind, &installed.version).join(datadir::PENDING_UPGRADE);
+    if !flag.exists() {
+        return;
+    }
+    let port = config.port(kind.id(), DEFAULT_PORT).to_string();
+    let upgrade = tool(&installed, "mariadb-upgrade");
+    let client = tool(&installed, "mariadb-admin");
+    std::thread::spawn(move || {
+        let quiet = |cmd: &mut Command| {
+            cmd.stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .is_ok_and(|s| s.success())
+        };
+        for _ in 0..60 {
+            if quiet(Command::new(&client).args(["-u", "root", "-h", "127.0.0.1", "-P", &port, "ping"])) {
+                if quiet(Command::new(&upgrade).args(["-u", "root", "-h", "127.0.0.1", "-P", &port])) {
+                    let _ = std::fs::remove_file(&flag);
+                    log::info!("mariadb-upgrade finished");
+                } else {
+                    log::warn!("mariadb-upgrade failed; run it by hand: {}", upgrade.display());
+                }
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_secs(1));
+        }
+    });
+}
+
 /// Both servers accept a list from these versions on; older ones take one
 /// address.
 fn bind_address(kind: Kind, version: &Version) -> &'static str {

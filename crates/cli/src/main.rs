@@ -128,6 +128,15 @@ enum Cmd {
         #[command(subcommand)]
         action: system::HostsAction,
     },
+    /// Database backup, restore, upgrade, and GUI.
+    Db {
+        #[command(subcommand)]
+        action: system::DbAction,
+    },
+    /// Share a site on the internet through cloudflared or ngrok (installed by you).
+    Share { site: String },
+    /// Turn Xdebug on (downloads it for each Windows PHP version) or off.
+    Xdebug { state: system::OnOff },
     /// Local HTTPS: trust or untrust MeowServer's certificate authority.
     Ssl {
         #[command(subcommand)]
@@ -218,6 +227,9 @@ fn run(cli: Cli) -> Result<()> {
         Cmd::Hosts { action } => system::hosts(&layout, action),
         Cmd::Defender { action } => system::defender(&layout, action),
         Cmd::Ssl { action } => system::ssl(&layout, action),
+        Cmd::Db { action } => system::db(&layout, action),
+        Cmd::Share { site } => system::share(&layout, &site),
+        Cmd::Xdebug { state } => system::xdebug(&layout, state),
         Cmd::Login { state } => system::login(&layout, state),
         Cmd::UndoSystemChanges => system::undo(&layout),
         Cmd::Import { from } => system::import(&layout, from),

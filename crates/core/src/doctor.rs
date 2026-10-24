@@ -132,6 +132,32 @@ pub fn run(layout: &Layout) -> Vec<Check> {
             continue;
         };
         let dir = datadir::path(layout, &config, kind, &installed.version);
+        let others: Vec<String> = std::fs::read_dir(layout.data())
+            .into_iter()
+            .flatten()
+            .filter_map(Result::ok)
+            .map(|e| e.path())
+            .filter(|p| {
+                p != &dir
+                    && p.file_name()
+                        .is_some_and(|n| n.to_string_lossy().starts_with(&format!("{}-", kind.id())))
+            })
+            .filter(|p| matches!(datadir::detect(p), datadir::Found::Data { .. }))
+            .map(|p| p.display().to_string())
+            .collect();
+        if !others.is_empty() {
+            checks.push(Check::problem(
+                format!("{} data", kind.id()),
+                format!("data from another {} version is not in use: {}", kind.id(), others.join(", ")),
+                format!(
+                    "To keep using it: meow use {} <that version>. To move it to {}: meow db upgrade {} {}",
+                    kind.id(),
+                    installed.version.line(),
+                    kind.id(),
+                    installed.version.line()
+                ),
+            ));
+        }
         match datadir::check(&dir, kind, &installed.version) {
             Ok(true) => {
                 checks.push(Check::ok(format!("{} data", kind.id()), "will be created on first start"))

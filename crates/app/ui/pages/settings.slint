@@ -88,6 +88,17 @@ export component SettingsPage inherits VerticalLayout {
                     }
                 }
                 Row {
+                    label: @tr("Tell me about new versions");
+                    hint: @tr("Checks GitHub once a day. Nothing is downloaded or sent.");
+                    Switch {
+                        checked: Backend.check-updates;
+                        accessible-label: @tr("Tell me about new versions");
+                        toggled => {
+                            Backend.set-check-updates(self.checked);
+                        }
+                    }
+                }
+                Row {
                     label: @tr("Trust the HTTPS certificate");
                     hint: Backend.ca-trusted ? @tr("Trusted. https:// sites open without a warning.") : @tr("Lets https:// sites open without a warning. The certificate only works for .localhost, .test, and this computer.");
                     Button {

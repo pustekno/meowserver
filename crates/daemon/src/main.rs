@@ -31,6 +31,7 @@ use tray::{Action, Tray};
 enum UserEvent {
     Menu(MenuEvent),
     Changed,
+    UpdateAvailable(String, String),
     Message(String),
     Shutdown,
 }
@@ -88,6 +89,8 @@ fn run() -> Result<()> {
         let _ = menu_proxy.send_event(UserEvent::Menu(e));
     }));
 
+    check_updates(&layout, &proxy);
+
     let crashed = report::unreported_crash(&layout).is_some();
     let mut tray: Option<Tray> = None;
     event_loop.run(move |event, _, control_flow| {
@@ -120,6 +123,12 @@ fn run() -> Result<()> {
             }
             Event::UserEvent(UserEvent::Changed) => {
                 if let Some(t) = &tray {
+                    t.refresh(&engine);
+                }
+            }
+            Event::UserEvent(UserEvent::UpdateAvailable(version, url)) => {
+                if let Some(t) = &mut tray {
+                    t.update = Some((version, url));
                     t.refresh(&engine);
                 }
             }
@@ -283,6 +292,28 @@ fn sync_hosts(engine: &Engine) {
         Err(e) => log::warn!("hosts update failed: {e:#}"),
     }
     BUSY.store(false, Ordering::SeqCst);
+}
+
+/// Once a day, when the user turned it on (PRD F37): ask GitHub for a newer
+/// release and show it in the tray. Never downloads anything.
+fn check_updates(layout: &Layout, proxy: &EventLoopProxy<UserEvent>) {
+    let layout = layout.clone();
+    let proxy = proxy.clone();
+    std::thread::spawn(move || {
+        loop {
+            let enabled = Config::load(&layout).is_ok_and(|c| c.general.check_updates);
+            if enabled && meow_core::update::due(&layout) {
+                match meow_core::update::check(&meow_core::http::Http::new()) {
+                    Ok(Some(a)) => {
+                        let _ = proxy.send_event(UserEvent::UpdateAvailable(a.version.to_string(), a.url));
+                    }
+                    Ok(None) => {}
+                    Err(e) => log::info!("update check: {e:#}"),
+                }
+            }
+            std::thread::sleep(std::time::Duration::from_secs(60 * 60));
+        }
+    });
 }
 
 fn shut_down(engine: &Engine) {

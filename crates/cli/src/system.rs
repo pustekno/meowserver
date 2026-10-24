@@ -27,6 +27,18 @@ pub enum HostsAction {
 }
 
 #[derive(Subcommand)]
+pub enum DbAction {
+    /// Dump one database, or all, into backups/ (server must be running).
+    Backup { service: String, database: Option<String> },
+    /// Load a .sql or .sql.gz file.
+    Restore { service: String, file: PathBuf },
+    /// Move data to a newer installed version, backing it up first.
+    Upgrade { service: String, version: String },
+    /// Open a database GUI (HeidiSQL, or general.db_tool).
+    Open { service: String },
+}
+
+#[derive(Subcommand)]
 pub enum SslAction {
     /// Add the CA to your trust store, so HTTPS sites show no warning.
     Trust,
@@ -206,6 +218,74 @@ pub fn hosts(layout: &Layout, action: HostsAction) -> Result<()> {
     }
 }
 
+pub fn db(layout: &Layout, action: DbAction) -> Result<()> {
+    use meow_core::database;
+    let kind = |s: &str| crate::versions::parse_kind(s);
+    match action {
+        DbAction::Backup { service, database: db } => {
+            let file = database::backup(layout, kind(&service)?, db.as_deref())?;
+            println!("Saved {}", file.display());
+        }
+        DbAction::Restore { service, file } => {
+            database::restore(layout, kind(&service)?, &file)?;
+            println!("Restored {}", file.display());
+        }
+        DbAction::Upgrade { service, version } => {
+            let k = kind(&service)?;
+            if meow_core::ipc::Client::connect(layout)
+                .and_then(|mut c| c.call(meow_core::ipc::Request::Status))
+                .is_ok_and(|s| s["units"].as_array().is_some_and(|u| u.iter().any(|x| x == k.id())))
+            {
+                bail!("stop {} first: meow stop {}", k.id(), k.id());
+            }
+            let mut copied = 0u64;
+            let backup = database::upgrade(layout, k, &version, &mut |n| {
+                copied += n;
+                print!("\r  backing up {}", import::human(copied));
+                let _ = std::io::stdout().flush();
+            })?;
+            println!("\nBackup in {}.", backup.display());
+            println!("{} {version} is now active. Start it with `meow start {}`.", k.id(), k.id());
+        }
+        DbAction::Open { service } => database::open_tool(layout, kind(&service)?)?,
+    }
+    Ok(())
+}
+
+/// Runs cloudflared or ngrok in the foreground, pointed at one site.
+pub fn share(layout: &Layout, name: &str) -> Result<()> {
+    let config = Config::load(layout)?;
+    let site = meow_core::site::discover(layout, &config)
+        .sites
+        .into_iter()
+        .find(|s| s.name == name)
+        .with_context(|| format!("no site named {name}"))?;
+    let port = config.port("web", 80);
+    let target = format!("http://127.0.0.1:{port}");
+    let found = |exe: &str| {
+        std::process::Command::new(exe)
+            .arg("--version")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .is_ok()
+    };
+    let mut cmd = if found("cloudflared") {
+        let mut c = std::process::Command::new("cloudflared");
+        c.args(["tunnel", "--url", &target, "--http-host-header", &site.host]);
+        c
+    } else if found("ngrok") {
+        let mut c = std::process::Command::new("ngrok");
+        c.args(["http", &target, &format!("--host-header={}", site.host)]);
+        c
+    } else {
+        bail!("install cloudflared or ngrok first; MeowServer only starts them");
+    };
+    println!("Sharing {} — press Ctrl+C to stop.", site.host);
+    let status = cmd.status()?;
+    std::process::exit(status.code().unwrap_or(0));
+}
+
 pub fn ssl(layout: &Layout, action: SslAction) -> Result<()> {
     match action {
         SslAction::Trust => {
@@ -228,6 +308,41 @@ pub fn ssl(layout: &Layout, action: SslAction) -> Result<()> {
             );
         }
     }
+    Ok(())
+}
+
+pub fn xdebug(layout: &Layout, state: OnOff) -> Result<()> {
+    use meow_core::service::{self, Kind, php};
+    let on = matches!(state, OnOff::On);
+    if on {
+        let http = meow_core::http::Http::new();
+        let missing: Vec<_> = service::installed(layout, Kind::Php)
+            .into_iter()
+            .filter(|i| !php::has_xdebug(i) && i.dir.join("ext").is_dir())
+            .collect();
+        let index =
+            if missing.is_empty() { String::new() } else { meow_core::provider::xdebug::index(&http)? };
+        for installed in missing {
+            match php::install_xdebug(&http, &index, &installed) {
+                Ok(v) => println!("Xdebug {v} installed for PHP {}", installed.version),
+                Err(e) => println!("PHP {}: {e:#}", installed.version),
+            }
+        }
+    }
+    let mut config = Config::load(layout)?;
+    config.php.xdebug = on;
+    config.save(layout)?;
+    if let Ok(mut client) = meow_core::ipc::Client::connect(layout) {
+        let _ = client.call(meow_core::ipc::Request::Restart { unit: "php".into() });
+    }
+    println!(
+        "{}",
+        if on {
+            "Xdebug is on. Start a debug session with ?XDEBUG_TRIGGER=1 or a browser extension; your IDE listens on port 9003."
+        } else {
+            "Xdebug is off."
+        }
+    );
     Ok(())
 }
 

@@ -76,6 +76,7 @@ pub fn install(layout: &Layout, service: &str, selector: Option<&str>) -> Result
         .find(|r| selector.is_none_or(|s| r.version.matches(s)))
         .with_context(|| format!("no {service} release matches {:?}", selector.unwrap_or("latest")))?;
     layout.ensure()?;
+    service::pin_before_install(layout, kind)?;
 
     let mut on_asset = |asset: &provider::Asset| {
         println!("Downloading {}", asset.url);

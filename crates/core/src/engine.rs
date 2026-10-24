@@ -233,6 +233,9 @@ impl Engine {
             self.supervisor.start(spec)?;
             ids.insert(id);
         }
+        if unit == Unit::Mariadb {
+            mysql::after_start(&self.layout, &ctx.config, crate::service::Kind::Mariadb);
+        }
         Ok(())
     }
 

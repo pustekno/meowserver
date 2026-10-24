@@ -14,6 +14,7 @@ mod nginx;
 mod node;
 mod php;
 mod postgres;
+pub mod xdebug;
 
 use anyhow::{Context, Result};
 use serde::Serialize;

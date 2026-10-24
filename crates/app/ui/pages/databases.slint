@@ -48,6 +48,20 @@ export component DatabasesPage inherits VerticalLayout {
                         }
                     }
                     Button {
+                        text: @tr("Back up");
+                        enabled: db.running && !Backend.busy;
+                        clicked => {
+                            Backend.db-backup(db.unit);
+                        }
+                    }
+                    Button {
+                        text: @tr("Open in tool");
+                        enabled: db.running;
+                        clicked => {
+                            Backend.db-open(db.unit);
+                        }
+                    }
+                    Button {
                         text: @tr("Data folder");
                         clicked => {
                             Backend.open-path(db.data-dir);

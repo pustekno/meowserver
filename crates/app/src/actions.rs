@@ -48,6 +48,7 @@ pub fn install(layout: &Layout, ui: &Ui, kind: Kind, selector: Option<&str>) -> 
         ui.progress(text);
     };
     layout.ensure()?;
+    service::pin_before_install(layout, kind)?;
     download::install(
         layout,
         &http,

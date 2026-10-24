@@ -9,6 +9,7 @@
 pub mod branding;
 pub mod config;
 pub mod create;
+pub mod database;
 pub mod defender;
 pub mod doctor;
 pub mod download;
@@ -30,6 +31,7 @@ pub mod system;
 pub mod template;
 pub mod terminal;
 pub mod tls;
+pub mod update;
 pub mod version;
 pub mod watch;
 

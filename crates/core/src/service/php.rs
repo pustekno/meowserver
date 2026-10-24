@@ -213,6 +213,7 @@ struct IniContext {
     extension_dir: Option<PathBuf>,
     extensions: Vec<String>,
     opcache: bool,
+    xdebug: bool,
     error_log: PathBuf,
     session_dir: PathBuf,
     tmp_dir: PathBuf,
@@ -250,6 +251,31 @@ const DEFAULT_SETTINGS: &[(&str, &str)] = &[
     ("opcache.revalidate_freq", "0"),
 ];
 
+/// Downloads Xdebug into a Windows PHP build's `ext/` (PRD F20, ADR 0006),
+/// checking xdebug.org's SHA-256. `index` is the download page, fetched
+/// once with [`crate::provider::xdebug::index`].
+pub fn install_xdebug(http: &crate::http::Http, index: &str, installed: &Installed) -> Result<String> {
+    let ext = installed.dir.join("ext");
+    if !ext.is_dir() {
+        bail!("PHP {} has no ext/ folder; install Xdebug with your package manager", installed.version);
+    }
+    let (version, asset) = crate::provider::xdebug::for_php(index, &installed.version.line())?;
+    let tmp = ext.join("php_xdebug.dll.download");
+    let actual = http.download(&asset.url, &tmp, &mut |_, _| {})?;
+    if let Some(expected) = &asset.sha256 {
+        if !expected.eq_ignore_ascii_case(&actual) {
+            let _ = std::fs::remove_file(&tmp);
+            bail!("checksum mismatch for {}; nothing was installed", asset.url);
+        }
+    }
+    std::fs::rename(&tmp, ext.join("php_xdebug.dll"))?;
+    Ok(version.to_string())
+}
+
+pub fn has_xdebug(installed: &Installed) -> bool {
+    installed.dir.join("ext").join("php_xdebug.dll").exists()
+}
+
 /// MeowServer's default for a php.ini setting, if it sets one.
 pub fn default_setting(key: &str) -> Option<&'static str> {
     DEFAULT_SETTINGS.iter().find(|(k, _)| *k == key).map(|(_, v)| *v)
@@ -264,7 +290,7 @@ pub fn available_extensions(installed: &Installed) -> Vec<String> {
             let name = e.file_name().to_string_lossy().into_owned();
             let ext = name.strip_prefix("php_")?.strip_suffix(".dll")?.to_owned();
             // OPcache is always on and managed separately.
-            (ext != "opcache").then_some(ext)
+            (ext != "opcache" && ext != "xdebug").then_some(ext)
         })
         .collect();
     names.sort();
@@ -275,12 +301,12 @@ fn render_ini(layout: &Layout, config: &Config, installed: &Installed) -> Result
     // Windows builds load extensions from ext/; static builds have them
     // compiled in, so there is nothing to list.
     let ext_dir = installed.dir.join("ext");
-    let (extension_dir, extensions, opcache) = if ext_dir.is_dir() {
+    let (extension_dir, extensions, opcache, xdebug) = if ext_dir.is_dir() {
         let has = |name: &str| ext_dir.join(format!("php_{name}.dll")).exists();
         let extensions = config.php.extensions.iter().filter(|e| has(e)).cloned().collect();
-        (Some(ext_dir.clone()), extensions, has("opcache"))
+        (Some(ext_dir.clone()), extensions, has("opcache"), config.php.xdebug && has("xdebug"))
     } else {
-        (None, Vec::new(), false)
+        (None, Vec::new(), false, false)
     };
 
     let mut settings: BTreeMap<String, String> =
@@ -313,6 +339,7 @@ fn render_ini(layout: &Layout, config: &Config, installed: &Installed) -> Result
         extension_dir,
         extensions,
         opcache,
+        xdebug,
         error_log: layout.logs().join(format!("php-{}-errors.log", installed.version)),
         session_dir,
         tmp_dir,

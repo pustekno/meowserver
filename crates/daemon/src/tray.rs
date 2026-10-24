@@ -61,13 +61,15 @@ pub struct Tray {
     icon: TrayIcon,
     /// Set after a crash, until the user reports or dismisses it.
     pub crash_notice: bool,
+    /// A newer release (version, page), found by the opt-in check.
+    pub update: Option<(String, String)>,
     message: Option<String>,
 }
 
 impl Tray {
     pub fn new(engine: &Engine, crash_notice: bool) -> Result<Self> {
         let icon = TrayIconBuilder::new().with_tooltip("MeowServer").with_icon(icon::stopped()).build()?;
-        let tray = Self { icon, crash_notice, message: None };
+        let tray = Self { icon, crash_notice, update: None, message: None };
         tray.refresh(engine);
         Ok(tray)
     }
@@ -129,6 +131,9 @@ impl Tray {
         menu.append(&MenuItem::new(headline, false, None))?;
         if self.crash_notice {
             menu.append(&item("report", "MeowServer crashed last time — Report…"))?;
+        }
+        if let Some((version, url)) = &self.update {
+            menu.append(&item(&format!("url:{url}"), &format!("MeowServer {version} is available…")))?;
         }
         menu.append(&PredefinedMenuItem::separator())?;
         menu.append(&item("start-all", "Start All"))?;

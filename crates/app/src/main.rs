@@ -631,6 +631,69 @@ fn wire(window: &AppWindow, ui: &Ui) {
             ui.refresh();
         }
     });
+    b.on_set_check_updates({
+        let ui = ui.clone();
+        move |on| {
+            if let Err(e) = edit_config(&ui.layout, |c| {
+                c.general.check_updates = on;
+                Ok(())
+            }) {
+                ui.message(format!("{e:#}"), true);
+            }
+        }
+    });
+    b.on_set_xdebug({
+        let ui = ui.clone();
+        move |on| {
+            ui.run(move |l, _| {
+                use meow_core::service::php;
+                let mut notes = Vec::new();
+                if on {
+                    let http = meow_core::http::Http::new();
+                    let missing: Vec<_> = service::installed(l, Kind::Php)
+                        .into_iter()
+                        .filter(|i| !php::has_xdebug(i) && i.dir.join("ext").is_dir())
+                        .collect();
+                    if !missing.is_empty() {
+                        let index = meow_core::provider::xdebug::index(&http)?;
+                        for installed in missing {
+                            if let Err(e) = php::install_xdebug(&http, &index, &installed) {
+                                notes.push(format!("PHP {}: {e:#}", installed.version));
+                            }
+                        }
+                    }
+                }
+                edit_config(l, |c| {
+                    c.php.xdebug = on;
+                    Ok(())
+                })?;
+                if snapshot::take(l).services.iter().any(|s| s.unit.id() == "php" && s.running) {
+                    actions::call(l, Request::Restart { unit: "php".into() })?;
+                }
+                Ok(notes.join("\n"))
+            })
+        }
+    });
+    b.on_db_backup({
+        let ui = ui.clone();
+        move |unit| {
+            let unit = unit.to_string();
+            ui.run(move |l, _| {
+                let kind = Kind::from_id(&unit).ok_or_else(|| anyhow::anyhow!("unknown service {unit}"))?;
+                let file = meow_core::database::backup(l, kind, None)?;
+                Ok(format!("{} {}", t("Saved"), file.display()))
+            })
+        }
+    });
+    b.on_db_open({
+        let ui = ui.clone();
+        move |unit| {
+            let Some(kind) = Kind::from_id(&unit) else { return };
+            if let Err(e) = meow_core::database::open_tool(&ui.layout, kind) {
+                ui.message(format!("{e:#}"), true);
+            }
+        }
+    });
     b.on_trust_ca({
         let ui = ui.clone();
         move || {
@@ -748,6 +811,8 @@ fn apply(w: &AppWindow, snap: &snapshot::Snapshot, local: &mut Local) {
     b.set_lan_access(c.general.lan_access);
     b.set_manage_hosts(c.general.manage_hosts);
     b.set_start_on_login(c.general.start_on_login);
+    b.set_check_updates(c.general.check_updates);
+    b.set_xdebug(c.php.xdebug);
     b.set_ca_trusted(meow_core::tls::is_trusted(&w_layout(w)));
 
     local.sites = snap.sites.clone();

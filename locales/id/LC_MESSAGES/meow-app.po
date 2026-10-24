@@ -266,3 +266,21 @@ msgstr "Templat"
 
 msgid "Create"
 msgstr "Buat"
+
+msgid "Xdebug (step debugging)"
+msgstr "Xdebug (debugging langkah demi langkah)"
+
+msgid "Downloads Xdebug for each PHP version. Start a session with ?XDEBUG_TRIGGER=1 or a browser extension; your IDE listens on port 9003. Slows PHP while on."
+msgstr "Mengunduh Xdebug untuk setiap versi PHP. Mulai sesi dengan ?XDEBUG_TRIGGER=1 atau ekstensi browser; IDE mendengarkan di port 9003. PHP lebih lambat selama aktif."
+
+msgid "Back up"
+msgstr "Backup"
+
+msgid "Open in tool"
+msgstr "Buka di aplikasi"
+
+msgid "Tell me about new versions"
+msgstr "Beri tahu saya jika ada versi baru"
+
+msgid "Checks GitHub once a day. Nothing is downloaded or sent."
+msgstr "Mengecek GitHub sekali sehari. Tidak ada yang diunduh atau dikirim."

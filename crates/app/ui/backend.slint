@@ -119,6 +119,8 @@ export global Backend {
     in property <bool> manage-hosts;
     in property <bool> defender-available;
     in property <bool> start-on-login;
+    in property <bool> check-updates;
+    in property <bool> xdebug;
     in property <bool> ca-trusted;
     in property <string> version;
     in property <string> attribution;
@@ -161,6 +163,10 @@ export global Backend {
     callback set-manage-hosts(bool);
     callback defender-exclude();
     callback set-start-on-login(bool);
+    callback set-check-updates(bool);
+    callback set-xdebug(bool);
+    callback db-backup(string);
+    callback db-open(string);
     callback trust-ca();
     callback undo-system();
     callback show-create(bool);

@@ -4,7 +4,7 @@
 
 // PHP (PRD F20, F21): extensions and common php.ini settings.
 
-import { Button, CheckBox, ComboBox, LineEdit, ScrollView } from "std-widgets.slint";
+import { Button, CheckBox, ComboBox, LineEdit, ScrollView, Switch } from "std-widgets.slint";
 import { Backend } from "../backend.slint";
 import { Card, PageHeader, Theme } from "../widgets.slint";
 
@@ -38,6 +38,31 @@ export component PhpPage inherits VerticalLayout {
             width: sv.visible-width;
             spacing: Theme.gap;
             alignment: start;
+            Card {
+                HorizontalLayout {
+                    spacing: 10px;
+                    VerticalLayout {
+                        horizontal-stretch: 1;
+                        Text {
+                            text: @tr("Xdebug (step debugging)");
+                            font-weight: 600;
+                        }
+                        Text {
+                            text: @tr("Downloads Xdebug for each PHP version. Start a session with ?XDEBUG_TRIGGER=1 or a browser extension; your IDE listens on port 9003. Slows PHP while on.");
+                            color: Theme.muted;
+                            wrap: word-wrap;
+                        }
+                    }
+                    Switch {
+                        checked: Backend.xdebug;
+                        enabled: !Backend.busy;
+                        accessible-label: @tr("Xdebug (step debugging)");
+                        toggled => {
+                            Backend.set-xdebug(self.checked);
+                        }
+                    }
+                }
+            }
             Card {
                 Text {
                     text: @tr("Settings");

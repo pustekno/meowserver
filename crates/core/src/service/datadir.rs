@@ -17,6 +17,8 @@ use crate::version::Version;
 
 /// Written by MeowServer into every data folder it creates.
 pub const MARKER: &str = ".meowserver.json";
+/// Left by `meow db upgrade` until the new server has upgraded the data.
+pub const PENDING_UPGRADE: &str = ".meowserver-upgrade-pending";
 
 #[derive(Serialize, Deserialize)]
 struct Marker {
@@ -70,8 +72,11 @@ pub fn detect(dir: &Path) -> Found {
             .and_then(|v| v["upgrade_history"].as_array()?.last()?["version"].as_str()?.parse().ok());
         return Found::Data { kind: Kind::Mysql, version };
     }
-    // Older MySQL and MariaDB: a one-line version string.
-    if let Ok(text) = std::fs::read_to_string(dir.join("mysql_upgrade_info")) {
+    // Older MySQL and MariaDB (newer MariaDB renames the file): a one-line
+    // version string.
+    let info = std::fs::read_to_string(dir.join("mariadb_upgrade_info"))
+        .or_else(|_| std::fs::read_to_string(dir.join("mysql_upgrade_info")));
+    if let Ok(text) = info {
         let text = text.trim_matches(|c: char| c.is_whitespace() || c == '\0');
         let kind = if text.contains("MariaDB") { Kind::Mariadb } else { Kind::Mysql };
         let version = text.split('-').next().and_then(|v| v.parse().ok());

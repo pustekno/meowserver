@@ -37,11 +37,16 @@ pub struct General {
     pub start_on_login: bool,
     pub autostart: Vec<String>,
     pub editor: Option<String>,
+    /// Command that opens a database GUI, with `{host}`, `{port}`, `{user}`
+    /// (PRD F28). Unset: HeidiSQL when installed.
+    pub db_tool: Option<String>,
     pub lan_access: bool,
     /// Write hosts entries for every site (PRD F16).
     pub manage_hosts: bool,
     /// Serve every site over HTTPS too, with the local CA (PRD F18).
     pub https: bool,
+    /// Look for a newer MeowServer once a day (PRD F37). Off by default.
+    pub check_updates: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -87,6 +92,9 @@ pub struct PhpSettings {
     pub ini: BTreeMap<String, String>,
     /// Number of `php-cgi` processes per PHP version on Windows (PRD §9.4).
     pub pool_size: u8,
+    /// Load Xdebug where it is installed (PRD F20). Off by default: it
+    /// slows every request.
+    pub xdebug: bool,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -129,9 +137,11 @@ impl Default for General {
             start_on_login: false,
             autostart: vec!["web".into(), "php".into(), "mysql".into()],
             editor: None,
+            db_tool: None,
             lan_access: false,
             manage_hosts: true,
             https: true,
+            check_updates: false,
         }
     }
 }
@@ -158,6 +168,7 @@ impl Default for PhpSettings {
             extensions: extensions.iter().map(|s| s.to_string()).collect(),
             ini: BTreeMap::new(),
             pool_size: 4,
+            xdebug: false,
         }
     }
 }

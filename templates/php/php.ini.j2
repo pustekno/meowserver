@@ -15,6 +15,13 @@ extension={{ ext }}
 {% if opcache %}
 zend_extension=opcache
 {% endif %}
+{% if xdebug %}
+zend_extension=xdebug
+xdebug.mode=debug,develop
+xdebug.start_with_request=trigger
+xdebug.client_host=127.0.0.1
+xdebug.client_port=9003
+{% endif %}
 error_log = {{ error_log | slashes | quote }}
 session.save_path = {{ session_dir | slashes | quote }}
 upload_tmp_dir = {{ tmp_dir | slashes | quote }}

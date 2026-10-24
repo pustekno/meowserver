@@ -29,6 +29,9 @@ impl Http {
         let config = ureq::Agent::config_builder()
             .user_agent(format!("MeowServer/{} (+https://github.com/pustekno/meowserver)", crate::VERSION))
             .https_only(true)
+            // Requests are few; reusing connections only invites trouble
+            // with servers that mishandle keep-alive (xdebug.org does).
+            .max_idle_connections(0)
             .timeout_connect(Some(Duration::from_secs(15)))
             .timeout_recv_response(Some(Duration::from_secs(30)))
             .build();
