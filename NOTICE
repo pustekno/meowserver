@@ -1,0 +1,39 @@
+MeowServer
+Copyright (C) 2026 PT Pusat Teknologi Nusantara (Pustekno)
+                   and PT Puskomedia Indonesia Kreatif (Puskomedia)
+
+This program is free software: you can redistribute it and/or modify it
+under the terms of the GNU General Public License as published by the Free
+Software Foundation, either version 3 of the License, or (at your option)
+any later version, with the additional terms below. See the LICENSE file
+for the full license text.
+
+This program is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+more details.
+
+
+ADDITIONAL TERMS UNDER SECTION 7(b) OF THE GNU GPL VERSION 3
+
+Any conveyed copy or modified version of this program must preserve the
+following author attribution, unaltered, in the Appropriate Legal Notices
+displayed by its user interface (for example, an "About" screen) and in
+its accompanying documentation:
+
+    "Originally created by Pustekno (https://pustekno.id)
+     and Puskomedia (https://www.puskomedia.id)."
+
+A modified version may add its own attributions next to it.
+
+
+TRADEMARKS
+
+The GPL does not grant rights to the "MeowServer" name or logo. See
+TRADEMARK.md.
+
+
+THIRD-PARTY CODE
+
+None at this time. Code adapted from other projects is listed here together
+with its original copyright notice and license text.
