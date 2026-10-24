@@ -247,7 +247,7 @@ mod tests {
         assert_eq!(c.port("web", 80), 80);
         assert_eq!(c.sites["asis"].php.as_deref(), Some("8.3"));
         assert!(c.sites["asis"].force_https);
-        assert_eq!(c.general.language, "en", "missing keys fall back to defaults");
+        assert!(c.general.manage_hosts, "missing keys fall back to defaults");
     }
 
     #[test]
