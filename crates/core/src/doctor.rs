@@ -20,15 +20,18 @@ pub struct Check {
     pub ok: bool,
     pub detail: String,
     pub fix: Option<String>,
+    /// What the window's button installs to fix it (`php 8.4`), if anything.
+    #[serde(default)]
+    pub install: Option<String>,
 }
 
 impl Check {
     fn ok(name: impl Into<String>, detail: impl Into<String>) -> Self {
-        Self { name: name.into(), ok: true, detail: detail.into(), fix: None }
+        Self { name: name.into(), ok: true, detail: detail.into(), fix: None, install: None }
     }
 
     fn problem(name: impl Into<String>, detail: impl Into<String>, fix: impl Into<String>) -> Self {
-        Self { name: name.into(), ok: false, detail: detail.into(), fix: Some(fix.into()) }
+        Self { name: name.into(), ok: false, detail: detail.into(), fix: Some(fix.into()), install: None }
     }
 }
 
@@ -256,6 +259,36 @@ pub fn run(layout: &Layout) -> Vec<Check> {
              made without administrator rights, so linked projects are missing",
             "Quit MeowServer and start it again from the Start menu.",
         ));
+    }
+
+    // PHP security releases (PHP2Shell and later; SECURITY_FLOOR).
+    for installed in service::installed(layout, Kind::Php) {
+        let version = &installed.version;
+        match service::php::security(version) {
+            service::php::Security::Patched => {}
+            service::php::Security::Outdated { fixed_in } => {
+                let line = version.line();
+                let mut check = Check::problem(
+                    format!("PHP {version}"),
+                    format!(
+                        "lacks security fixes that {fixed_in} has (PHP2Shell, CVE-2026-109618 and \
+                         CVE-2026-109619); MeowServer turns off session upload progress for it meanwhile"
+                    ),
+                    format!("meow install php {line}, then remove {version} on the Versions page"),
+                );
+                check.install = Some(format!("php {line}"));
+                checks.push(check);
+            }
+            // Old lines stay for old projects; risky once reachable from
+            // the network.
+            service::php::Security::Unsupported if config.general.lan_access => checks.push(Check::problem(
+                format!("PHP {version}"),
+                "no longer gets security fixes and is reachable from the local network (PHP2Shell \
+                 affects it); MeowServer turns off session upload progress for it",
+                "Turn off local network access, or move projects to PHP 8.2 or newer.",
+            )),
+            service::php::Security::Unsupported => {}
+        }
     }
 
     // `meow` is a short name another program may also use; a terminal runs

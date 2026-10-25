@@ -123,6 +123,28 @@ export component PhpPage inherits VerticalLayout {
                         Backend.toggle-extension(e.name, self.checked);
                     }
                 }
+                if Backend.pecl-extensions.length > 0: Text {
+                    text: Backend.extension-filter == ""
+                        ? @tr("More from PECL (php.net), downloaded for this PHP version. Search to see all of them:")
+                        : @tr("From PECL (php.net):");
+                    color: Theme.muted;
+                    wrap: word-wrap;
+                }
+                for name in Backend.pecl-extensions: HorizontalLayout {
+                    spacing: 8px;
+                    Text {
+                        text: name;
+                        vertical-alignment: center;
+                        horizontal-stretch: 1;
+                    }
+                    Button {
+                        text: @tr("Install");
+                        enabled: !Backend.busy;
+                        clicked => {
+                            Backend.install-extension(name);
+                        }
+                    }
+                }
             }
         }
     }

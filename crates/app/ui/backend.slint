@@ -54,6 +54,9 @@ export struct CheckRow {
     ok: bool,
     detail: string,
     fix: string,
+    // What its button installs (`php 8.4`), and the button's label.
+    install: string,
+    install-label: string,
 }
 
 export struct ExtRow {
@@ -205,6 +208,9 @@ export global Backend {
 
     callback select-php(int);
     callback toggle-extension(string, bool);
+    // Extensions from PECL not in this PHP build yet (imagick, redis, …).
+    in property <[string]> pecl-extensions;
+    callback install-extension(string);
     callback search-extensions(string);
     callback set-ini(string, string);
     callback save-php();

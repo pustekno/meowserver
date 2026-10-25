@@ -200,6 +200,13 @@ export component HomePage inherits VerticalLayout {
                             color: Theme.muted;
                         }
                     }
+                    if p.install != "": Button {
+                        text: p.install-label;
+                        enabled: !Backend.busy;
+                        clicked => {
+                            Backend.fix-need(p.install);
+                        }
+                    }
                     Link {
                         text: @tr("Copy");
                         clicked => {

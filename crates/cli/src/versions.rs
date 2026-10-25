@@ -154,3 +154,49 @@ pub fn use_version(layout: &Layout, service: &str, selector: &str) -> Result<()>
         Ok(())
     }
 }
+
+#[derive(clap::Subcommand)]
+pub enum ExtAction {
+    /// Download a PECL extension for a PHP version and turn it on.
+    Install {
+        name: String,
+        /// PHP version to add it to (default: the active one).
+        #[arg(long)]
+        php: Option<String>,
+    },
+    /// List PECL extensions whose name contains TEXT.
+    Search { text: String },
+}
+
+pub fn ext(layout: &Layout, action: ExtAction) -> Result<()> {
+    use meow_core::{http::Http, pecl};
+    let http = Http::new();
+    match action {
+        ExtAction::Search { text } => {
+            for name in pecl::index(layout, &http)?.into_iter().filter(|n| n.contains(&text.to_lowercase())) {
+                println!("{name}");
+            }
+        }
+        ExtAction::Install { name, php } => {
+            let config = Config::load(layout)?;
+            let selector = php.as_deref().or(config.version_selector("php"));
+            let installed = meow_core::service::select(layout, Kind::Php, selector)
+                .ok_or_else(|| anyhow::anyhow!("PHP is not installed: meow install php"))?;
+            let (added, version) = pecl::install(layout, &http, &installed, &name, &mut |got, _| {
+                print!("\r  {}", meow_core::import::human(got));
+                let _ = std::io::Write::flush(&mut std::io::stdout());
+            })?;
+            println!();
+            let mut config = Config::load(layout)?;
+            for ext in &added {
+                if !config.php.extensions.contains(ext) {
+                    config.php.extensions.push(ext.clone());
+                }
+            }
+            config.save(layout)?;
+            println!("{} {version} installed for PHP {} and turned on.", added.join(", "), installed.version);
+            let _ = crate::daemon::call(layout, meow_core::ipc::Request::Restart { unit: "php".into() });
+        }
+    }
+    Ok(())
+}

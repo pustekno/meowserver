@@ -355,3 +355,9 @@ msgstr "Salin semua"
 msgid "Copy"
 msgstr "Salin"
 
+msgid "More from PECL (php.net), downloaded for this PHP version. Search to see all of them:"
+msgstr "Ekstensi tambahan dari PECL (php.net), diunduh untuk versi PHP ini. Cari untuk melihat semuanya:"
+
+msgid "From PECL (php.net):"
+msgstr "Dari PECL (php.net):"
+

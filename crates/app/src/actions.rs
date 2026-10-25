@@ -290,6 +290,32 @@ pub fn use_port(layout: &Layout, ui: &Ui, kind: Kind, port: u16) -> Result<Strin
     ))
 }
 
+/// Downloads a PECL extension for one PHP version, turns it on, and
+/// restarts PHP if it runs.
+pub fn install_extension(layout: &Layout, ui: &Ui, php: &service::Installed, name: &str) -> Result<String> {
+    let http = Http::new();
+    ui.progress(t("Downloading {}…").replace("{}", name));
+    let (added, version) = meow_core::pecl::install(layout, &http, php, name, &mut |got, total| {
+        let total = total.map(|t| format!(" / {}", import::human(t))).unwrap_or_default();
+        ui.progress(format!("{name}: {}{total}", import::human(got)));
+    })?;
+    ui.progress(String::new());
+    let mut config = Config::load(layout)?;
+    for ext in &added {
+        if !config.php.extensions.contains(ext) {
+            config.php.extensions.push(ext.clone());
+        }
+    }
+    config.save(layout)?;
+    if Client::connect(layout).is_ok() {
+        let _ = call(layout, Request::Restart { unit: "php".into() });
+    }
+    Ok(t("{} {} installed for PHP {} and turned on.")
+        .replacen("{}", &added.join(", "), 1)
+        .replacen("{}", &version, 1)
+        .replacen("{}", &php.version.to_string(), 1))
+}
+
 /// Tells a running `meowd` to apply `meow.toml` again; quietly does
 /// nothing if it is not running.
 pub fn reload(layout: &Layout) {

@@ -316,6 +316,38 @@ pub fn available_extensions(installed: &Installed) -> Vec<String> {
     names
 }
 
+/// The first release of each supported PHP line with the latest security
+/// fixes: PHP2Shell, CVE-2026-109618 and CVE-2026-109619 (2026-10-21).
+/// Update with every PHP security release. Older lines get no fixes.
+pub const SECURITY_FLOOR: [(&str, &str); 4] =
+    [("8.2", "8.2.35"), ("8.3", "8.3.36"), ("8.4", "8.4.27"), ("8.5", "8.5.12")];
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Security {
+    Patched,
+    /// A newer release of the same line has the fixes.
+    Outdated {
+        fixed_in: String,
+    },
+    /// The line no longer gets security fixes (8.1 and older).
+    Unsupported,
+}
+
+pub fn security(version: &Version) -> Security {
+    let line = version.line();
+    if let Some((_, fixed)) = SECURITY_FLOOR.iter().find(|(l, _)| *l == line) {
+        let fixed: Version = fixed.parse().expect("valid version");
+        return if *version >= fixed {
+            Security::Patched
+        } else {
+            Security::Outdated { fixed_in: fixed.to_string() }
+        };
+    }
+    let oldest: Version = SECURITY_FLOOR[0].0.parse().expect("valid version");
+    // Newer lines than the table knows were released after these fixes.
+    if *version < oldest { Security::Unsupported } else { Security::Patched }
+}
+
 fn render_ini(layout: &Layout, config: &Config, installed: &Installed) -> Result<String> {
     // Windows builds load extensions from ext/; static builds have them
     // compiled in, so there is nothing to list.
@@ -347,6 +379,14 @@ fn render_ini(layout: &Layout, config: &Config, installed: &Installed) -> Result
     std::fs::create_dir_all(&opcache_dir)?;
     let opcache_path = opcache_dir.display().to_string().replace('\\', "/");
     settings.insert("opcache.file_cache".into(), format!("\"{opcache_path}\""));
+    // Without the PHP2Shell fixes: turn off what the attacks go through
+    // (the advisory's stopgap). Settings in meow.toml still win.
+    if security(&installed.version) != Security::Patched {
+        settings.insert("session.upload_progress.enabled".into(), "Off".into());
+        if installed.version.line() == "8.5" {
+            settings.insert("fatal_error_backtraces".into(), "0".into());
+        }
+    }
     settings.extend(config.php.ini.clone());
 
     let session_dir = layout.data().join("php").join("sessions");
@@ -372,6 +412,17 @@ fn render_ini(layout: &Layout, config: &Config, installed: &Installed) -> Result
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn php2shell_fixed_versions() {
+        let s = |v: &str| security(&v.parse().unwrap());
+        assert_eq!(s("8.5.12"), Security::Patched);
+        assert_eq!(s("8.4.26"), Security::Outdated { fixed_in: "8.4.27".into() });
+        assert_eq!(s("8.2.40"), Security::Patched);
+        assert_eq!(s("8.1.33"), Security::Unsupported);
+        assert_eq!(s("7.4.33"), Security::Unsupported);
+        assert_eq!(s("8.6.0"), Security::Patched, "a newer line than the table");
+    }
 
     #[test]
     fn ports_are_fixed_per_line() {

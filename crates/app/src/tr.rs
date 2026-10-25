@@ -80,6 +80,9 @@ pub fn t(text: &str) -> String {
         "Copying projects and databases" => "Menyalin proyek dan database",
         "Needs PHP {}, but would run on PHP {}." => "Butuh PHP {}, tapi akan jalan di PHP {}.",
         "Install PHP {}" => "Pasang PHP {}",
+        "Downloading {}…" => "Mengunduh {}…",
+        "{} {} installed for PHP {} and turned on." => "{} {} terpasang untuk PHP {} dan sudah diaktifkan.",
+        "Update PHP {}" => "Perbarui PHP {}",
         "Connects to {} on port {}, but MeowServer's runs on {}." => {
             "Terhubung ke {} di port {}, tapi milik MeowServer jalan di {}."
         }

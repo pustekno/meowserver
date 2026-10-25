@@ -133,6 +133,8 @@ struct Local {
     apps_running: Vec<String>,
     /// Every extension the selected PHP build ships, and the ones ticked.
     php_available: Vec<String>,
+    /// Every extension php.net builds for Windows (PECL), once fetched.
+    pecl_index: Vec<String>,
     php_ext: BTreeSet<String>,
     php_ini: BTreeMap<String, String>,
     add_path: Option<PathBuf>,
@@ -199,6 +201,7 @@ fn main() -> Result<()> {
     ui.refresh();
     run_doctor(&ui);
     detect_importers(&ui);
+    load_pecl_index(&ui);
 
     // Keep the view current while someone looks at it; do nothing while
     // the window is minimized (PRD §8.1: no busy work when idle).
@@ -652,6 +655,21 @@ fn wire(window: &AppWindow, ui: &Ui) {
                 let count = LOCAL.with(|l| l.borrow().php_ext.len());
                 w.global::<Backend>().set_extensions_enabled(count as i32);
             }
+        }
+    });
+    b.on_install_extension({
+        let weak = window.as_weak();
+        let ui = ui.clone();
+        move |name| {
+            let Some(w) = weak.upgrade() else { return };
+            let Some(php) = selected_php(&w, &ui.layout) else { return };
+            let name = name.to_string();
+            ui.run(move |layout, ui| {
+                let message = actions::install_extension(layout, ui, &php, &name)?;
+                let layout = layout.clone();
+                ui.on_ui(move |w| load_php(w, &layout));
+                Ok(message)
+            });
         }
     });
     b.on_search_extensions({
@@ -1240,21 +1258,53 @@ fn show_extensions(w: &AppWindow) {
         b.set_extensions(model(rows));
         b.set_extensions_total(l.php_available.len() as i32);
         b.set_extensions_enabled(l.php_ext.len() as i32);
+        // PECL: the popular ones until something is typed, then every match.
+        let pecl: Vec<String> = if l.php_available.is_empty() {
+            Vec::new() // macOS/Linux builds take no added extensions
+        } else if filter.is_empty() {
+            meow_core::pecl::POPULAR.iter().map(|s| s.to_string()).collect()
+        } else {
+            let mut names: Vec<String> =
+                l.pecl_index.iter().filter(|n| n.contains(&filter)).cloned().collect();
+            names.extend(
+                meow_core::pecl::POPULAR.iter().filter(|n| n.contains(&filter)).map(|s| s.to_string()),
+            );
+            names.sort();
+            names.dedup();
+            names
+        };
+        let pecl: Vec<String> = pecl.into_iter().filter(|n| !l.php_available.contains(n)).take(40).collect();
+        b.set_pecl_extensions(strings(pecl));
+    });
+}
+
+/// Fetches the PECL list in the background, so searching can offer it.
+fn load_pecl_index(ui: &Ui) {
+    if platform::os() != platform::Os::Windows {
+        return;
+    }
+    let ui = ui.clone();
+    std::thread::spawn(move || {
+        let Ok(names) = meow_core::pecl::index(&ui.layout, &meow_core::http::Http::new()) else { return };
+        ui.on_ui(move |w| {
+            LOCAL.with(|l| l.borrow_mut().pecl_index = names);
+            show_extensions(w);
+        });
     });
 }
 
 fn run_doctor(ui: &Ui) {
     let ui = ui.clone();
     std::thread::spawn(move || {
-        let problems: Vec<(String, String, String)> = doctor::run(&ui.layout)
+        let problems: Vec<(String, String, String, String)> = doctor::run(&ui.layout)
             .into_iter()
             .filter(|c| !c.ok)
-            .map(|c| (c.name, c.detail, c.fix.unwrap_or_default()))
+            .map(|c| (c.name, c.detail, c.fix.unwrap_or_default(), c.install.unwrap_or_default()))
             .collect();
         // For "Copy all": one block to paste into a chat or an issue.
         let text: Vec<String> = problems
             .iter()
-            .map(|(name, detail, fix)| {
+            .map(|(name, detail, fix, _)| {
                 let fix = if fix.is_empty() {
                     String::new()
                 } else {
@@ -1267,11 +1317,18 @@ fn run_doctor(ui: &Ui) {
         ui.on_ui(move |w| {
             let rows = problems
                 .into_iter()
-                .map(|(name, detail, fix)| CheckRow {
+                .map(|(name, detail, fix, install)| CheckRow {
                     name: name.into(),
                     ok: false,
                     detail: detail.into(),
                     fix: fix.into(),
+                    // `php 8.4` → "Update PHP 8.4"
+                    install_label: install
+                        .strip_prefix("php ")
+                        .map(|line| t("Update PHP {}").replace("{}", line))
+                        .unwrap_or_default()
+                        .into(),
+                    install: install.into(),
                 })
                 .collect();
             let b = w.global::<Backend>();

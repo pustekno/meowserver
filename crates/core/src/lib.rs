@@ -22,6 +22,7 @@ pub mod ipc;
 pub mod layout;
 pub mod logging;
 pub mod logs;
+pub mod pecl;
 pub mod platform;
 pub mod provider;
 pub mod report;

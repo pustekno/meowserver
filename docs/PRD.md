@@ -255,6 +255,30 @@ max execution time, display errors) editable from the GUI; anything else goes
 in the user override directory (§9.9).
 *Done when:* a value set in the GUI shows up in `phpinfo()` after one click.
 
+**F44 — More PHP extensions.** PHP's Windows build carries 37 extensions;
+imagick, redis, apcu, mongodb, igbinary, sqlsrv, yaml, and the rest come
+from PECL. The PHP page offers the popular ones and, when searching, every
+extension php.net builds for Windows (its PECL index, fetched once a day);
+Install picks the newest stable release with a 64-bit, non-thread-safe
+build for the selected PHP line, puts `php_*.dll` in `ext\` and the
+libraries it loads (ImageMagick's DLLs) next to `php-cgi.exe` without
+replacing PHP's own, turns it on, and restarts PHP. CLI: `meow ext install
+<name> [--php 8.4]`, `meow ext search <text>`. php.net publishes no
+checksums for these, so they come only from downloads.php.net over HTTPS.
+macOS and Linux builds have their extensions compiled in.
+*Done when:* `new Imagick()` works after one click on a fresh PHP 8.4.
+
+**F45 — PHP security releases.** MeowServer knows the first release of
+each PHP line with the latest security fixes (currently PHP2Shell,
+CVE-2026-109618 and CVE-2026-109619: 8.2.35, 8.3.36, 8.4.27, 8.5.12) and
+updates that table with every PHP security release. An installed PHP below
+it shows in Doctor with "Update PHP 8.x", and until then runs with the
+advisory's stopgap (`session.upload_progress.enabled = Off`, and
+`fatal_error_backtraces = 0` on 8.5), unless meow.toml says otherwise.
+Lines that no longer get fixes (8.1 and older, kept for old projects) run
+with the same stopgap, and are reported once the local network can reach
+them.
+
 **F22 — Mail capture.** PHP's mail settings point at Mailpit; the Mailpit inbox
 opens from the tray.
 *Done when:* `mail()` from any site appears in the Mailpit inbox.
@@ -1269,6 +1293,7 @@ directly:
 | 2026-10-25 | Owner request after slow Laragon sites on interns' laptops: performance rules in §8.7, Defender exclusions (F39), dev-server ports (F40). Evidence in ADR 0007. |
 | 2026-10-25 | Owner request: import is not Laragon-only. F27 now detects XAMPP, WampServer, and FlyEnv too, and shows the plan before copying. |
 | 2026-10-25 | Owner request: MySQL clashed with Laragon. Services now move to a free port and save it (F41). The `meow` command name may be taken by another program; Doctor reports which `meow` a terminal runs. |
+| 2026-10-25 | Owner request: more PHP extensions (F44, PECL for Windows) and an answer on PHP2Shell (F45). 8.5.12 is current and fixed; older patch levels get an update button and a stopgap in php.ini. "Use port 3306 for MySQL" fixes projects set up for Laragon in one click; Home's problems can be copied. |
 | 2026-10-25 | Owner request: projects in other languages. Stage 1 done (F43): Node.js, Python (python-build-standalone, the builds uv uses), and Go, with detection, per-project versions, a port behind the site name, and dev servers started by hand only. Home lists every port of every service, as Laragon does. |
 | 2026-10-25 | Owner request: domain per project (default `.localhost`, `.test` where wanted; F15), several MySQL/MariaDB versions at once (F24), import copies projects stored inside the old tool and follows its links so the tool can be removed (F27), ports return once free (F41), and project needs read from composer.json and settings (F42). Found while testing: Inno Setup 6.7 enforces Windows' RedirectionGuard on Setup, and programs Setup starts inherit it and refuse junctions made without admin rights; Setup now starts MeowServer through Explorer, the window restarts itself through Explorer when it finds the guard, and Doctor reports it. |
 | 2026-10-25 | Owner request: a Windows installer for first install and updates that never deletes data. Inno Setup 6 (free for open source; the only build tool that is not Rust), per user without administrator rights, default `C:\MeowServer` because data lives next to the program; Program Files is refused. Updates replace only the program files; uninstall keeps `www`, `data`, `bin`, and settings. |

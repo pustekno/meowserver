@@ -138,6 +138,11 @@ enum Cmd {
     },
     /// Share a site on the internet through cloudflared or ngrok (installed by you).
     Share { site: String },
+    /// PHP extensions from PECL (imagick, redis, apcu, …) for Windows PHP builds.
+    Ext {
+        #[command(subcommand)]
+        action: versions::ExtAction,
+    },
     /// Start or stop the development server of a Node, Python, or Go project.
     Dev {
         #[command(subcommand)]
@@ -237,6 +242,7 @@ fn run(cli: Cli) -> Result<()> {
         Cmd::Db { action } => system::db(&layout, action),
         Cmd::Share { site } => system::share(&layout, &site),
         Cmd::Dev { action } => sites::dev(&layout, action),
+        Cmd::Ext { action } => versions::ext(&layout, action),
         Cmd::Xdebug { state } => system::xdebug(&layout, state),
         Cmd::Login { state } => system::login(&layout, state),
         Cmd::UndoSystemChanges => system::undo(&layout),
