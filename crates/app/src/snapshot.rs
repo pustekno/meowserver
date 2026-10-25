@@ -58,15 +58,17 @@ pub fn need(problem: &site::needs::Problem) -> (String, String, String) {
             family.kinds()[0].id().to_owned(),
             fill("Install {}", &[family.name()]),
         ),
-        Problem::DatabasePort { family, port, served } => {
+        Problem::DatabasePort { family, port, served, server } => {
             let served: Vec<String> = served.iter().map(u16::to_string).collect();
             (
                 fill(
-                    "Connects to {} on port {}, but MeowServer's runs on {}. Change the port in the project's settings, or run a version on {} (Databases page).",
-                    &[family.name(), &port.to_string(), &served.join(", "), &port.to_string()],
+                    "Connects to {} on port {}, but MeowServer's runs on {}.",
+                    &[family.name(), &port.to_string(), &served.join(", ")],
                 ),
-                String::new(),
-                String::new(),
+                // One click moves MeowServer's server to the project's port,
+                // which fixes every project set up the same way.
+                format!("port {} {port}", server.id()),
+                fill("Use port {} for {}", &[&port.to_string(), title(*server)]),
             )
         }
     }

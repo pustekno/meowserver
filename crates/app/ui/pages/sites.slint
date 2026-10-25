@@ -113,7 +113,7 @@ component SiteItem inherits Rectangle {
                 text: root.site.need-install-label;
                 enabled: !Backend.busy;
                 clicked => {
-                    Backend.install-service(root.site.need-install);
+                    Backend.fix-need(root.site.need-install);
                 }
             }
         }

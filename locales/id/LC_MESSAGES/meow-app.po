@@ -349,3 +349,9 @@ msgstr "Log"
 msgid "Languages"
 msgstr "Bahasa pemrograman"
 
+msgid "Copy all"
+msgstr "Salin semua"
+
+msgid "Copy"
+msgstr "Salin"
+

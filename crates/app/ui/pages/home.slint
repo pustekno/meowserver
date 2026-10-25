@@ -13,9 +13,25 @@ import { ImportChoices } from "import.slint";
 export component HomePage inherits VerticalLayout {
     spacing: Theme.gap;
 
+    // Puts `text` on the clipboard through a zero-size, read-only input:
+    // Slint offers copying only from a text input.
+    function copy(text: string) {
+        clipboard.text = text;
+        clipboard.select-all();
+        clipboard.copy();
+        clipboard.clear-selection();
+    }
+
     PageHeader {
         title: @tr("Home");
         subtitle: Backend.headline;
+        // Zero-size, in the header row where it cannot squeeze the page.
+        clipboard := TextInput {
+            read-only: true;
+            width: 0px;
+            height: 0px;
+            opacity: 0;
+        }
         Button {
             text: @tr("Start All");
             primary: true;
@@ -149,10 +165,17 @@ export component HomePage inherits VerticalLayout {
 
             if Backend.problems.length > 0: Card {
                 HorizontalLayout {
+                    spacing: 16px;
                     Text {
                         text: @tr("Things to check");
                         font-weight: 600;
                         horizontal-stretch: 1;
+                    }
+                    Link {
+                        text: @tr("Copy all");
+                        clicked => {
+                            root.copy(Backend.problems-text);
+                        }
                     }
                     Link {
                         text: @tr("Check again");
@@ -161,17 +184,27 @@ export component HomePage inherits VerticalLayout {
                         }
                     }
                 }
-                for p in Backend.problems: VerticalLayout {
-                    spacing: 2px;
-                    Text {
-                        text: p.name + ": " + p.detail;
-                        wrap: word-wrap;
-                        color: Theme.bad;
+                for p in Backend.problems: HorizontalLayout {
+                    spacing: 12px;
+                    VerticalLayout {
+                        spacing: 2px;
+                        horizontal-stretch: 1;
+                        Text {
+                            text: p.name + ": " + p.detail;
+                            wrap: word-wrap;
+                            color: Theme.bad;
+                        }
+                        if p.fix != "": Text {
+                            text: @tr("Fix: {}", p.fix);
+                            wrap: word-wrap;
+                            color: Theme.muted;
+                        }
                     }
-                    if p.fix != "": Text {
-                        text: @tr("Fix: {}", p.fix);
-                        wrap: word-wrap;
-                        color: Theme.muted;
+                    Link {
+                        text: @tr("Copy");
+                        clicked => {
+                            root.copy(p.name + ": " + p.detail + (p.fix != "" ? "\n" + @tr("Fix: {}", p.fix) : ""));
+                        }
                     }
                 }
             }

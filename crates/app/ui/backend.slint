@@ -106,6 +106,8 @@ export global Backend {
     // Home.
     in property <[ServiceRow]> services;
     in property <[CheckRow]> problems;
+    // The same, as text to copy.
+    in property <string> problems-text;
     in property <bool> needs-setup;
     // Other tools found to import from (Laragon, XAMPP, WampServer,
     // FlyEnv), and the plan shown before anything is copied.
@@ -192,6 +194,8 @@ export global Backend {
     callback set-site-php(string, string);
     callback set-site-domain(string, int);
     callback toggle-app(string, bool);
+    // `php 7.4`, `postgres`: install; `port mysql 3306`: move a server there.
+    callback fix-need(string);
 
     callback select-kind(int);
     callback load-available();

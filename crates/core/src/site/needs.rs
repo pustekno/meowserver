@@ -182,7 +182,8 @@ pub enum Problem {
     /// No installed version of the project's runtime fits.
     Runtime { kind: Kind, constraint: String, suggest: String },
     /// Installed, but nothing of MeowServer's listens on the project's port.
-    DatabasePort { family: Family, port: u16, served: Vec<u16> },
+    /// `server` is MeowServer's default server for it, which can move there.
+    DatabasePort { family: Family, port: u16, served: Vec<u16>, server: Kind },
 }
 
 impl Problem {
@@ -220,7 +221,7 @@ impl Problem {
                 runtime_name(*kind),
                 kind.id()
             ),
-            Problem::DatabasePort { family, port, served } => format!(
+            Problem::DatabasePort { family, port, served, .. } => format!(
                 "{site} connects to {} on port {port}, but MeowServer's runs on {}; change the port in the project's \
                  settings, or run a version on {port} (meow db enable)",
                 family.name(),
@@ -284,11 +285,13 @@ pub fn problems(layout: &Layout, config: &Config, site: &Site) -> Vec<Problem> {
     }
     if let Some(db) = &needs.database {
         let mut served = Vec::new();
+        let mut server = None;
         for kind in db.family.kinds() {
             if service::select(layout, *kind, config.version_selector(kind.id())).is_none() {
                 continue;
             }
             let default = if *kind == Kind::Postgres { postgres::DEFAULT_PORT } else { mysql::DEFAULT_PORT };
+            server.get_or_insert(*kind);
             served.push(config.port(kind.id(), default));
             if let Some(settings) = config.services.get(kind.id()) {
                 served.extend(settings.extra.values());
@@ -296,8 +299,10 @@ pub fn problems(layout: &Layout, config: &Config, site: &Site) -> Vec<Problem> {
         }
         if served.is_empty() {
             out.push(Problem::DatabaseMissing { family: db.family });
-        } else if !served.contains(&db.port) {
-            out.push(Problem::DatabasePort { family: db.family, port: db.port, served });
+        } else if !served.contains(&db.port)
+            && let Some(server) = server
+        {
+            out.push(Problem::DatabasePort { family: db.family, port: db.port, served, server });
         }
     }
     out

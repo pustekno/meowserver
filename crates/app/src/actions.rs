@@ -228,6 +228,68 @@ pub fn db_version(layout: &Layout, unit: &str, line: &str, enable: bool) -> Resu
     }
 }
 
+/// Moves MeowServer's `kind` server to `port`, the port projects connect to
+/// (Laragon's 3306, say), so they all work without editing their settings.
+/// A database server another tool left running there (Laragon's MySQL,
+/// which closing Laragon does not stop) is stopped first, the way import
+/// does; any other program in the way is named instead.
+pub fn use_port(layout: &Layout, ui: &Ui, kind: Kind, port: u16) -> Result<String> {
+    use meow_core::platform;
+    let foreign = |port: u16| -> Vec<String> {
+        platform::port_owners(port)
+            .into_iter()
+            .map(|(_, exe)| exe)
+            .filter(|exe| !platform::is_inside(exe, layout.root()))
+            .collect()
+    };
+    if !foreign(port).is_empty() {
+        ui.progress(t("Stopping the database that holds port {}…").replace("{}", &port.to_string()));
+        for source in import::detect_all() {
+            if foreign(port).iter().any(|exe| platform::is_inside(exe, &source.root)) {
+                for note in import::stop_databases(&source) {
+                    log_warn(&format!("use port {port}: {note}"));
+                }
+            }
+        }
+        ui.progress(String::new());
+        if let Some(exe) = foreign(port).first() {
+            bail!(
+                "{}",
+                t("Port {} is used by {}. Close that program first.")
+                    .replacen("{}", &port.to_string(), 1)
+                    .replacen("{}", exe, 1)
+            );
+        }
+    }
+    let mut config = Config::load(layout)?;
+    // Another of MeowServer's own servers set to that port.
+    for other in [Kind::Mysql, Kind::Mariadb, Kind::Postgres].into_iter().filter(|k| *k != kind) {
+        let default = if other == Kind::Postgres { 5432 } else { 3306 };
+        let installed = service::select(layout, other, config.version_selector(other.id())).is_some();
+        if installed && config.port(other.id(), default) == port {
+            bail!(
+                "{}",
+                t("Port {} is used by MeowServer's {}.").replacen("{}", &port.to_string(), 1).replacen(
+                    "{}",
+                    crate::snapshot::title(other),
+                    1
+                )
+            );
+        }
+    }
+    let default = if kind == Kind::Postgres { 5432 } else { 3306 };
+    let settings = config.services.entry(kind.id().into()).or_default();
+    settings.port = (port != default).then_some(port);
+    settings.moved_from.remove("port");
+    config.save(layout)?;
+    call(layout, Request::Restart { unit: kind.id().into() })?;
+    Ok(t("{} now uses port {}.").replacen("{}", crate::snapshot::title(kind), 1).replacen(
+        "{}",
+        &port.to_string(),
+        1,
+    ))
+}
+
 /// Tells a running `meowd` to apply `meow.toml` again; quietly does
 /// nothing if it is not running.
 pub fn reload(layout: &Layout) {

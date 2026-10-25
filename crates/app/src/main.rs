@@ -474,6 +474,26 @@ fn wire(window: &AppWindow, ui: &Ui) {
         }
     });
 
+    b.on_fix_need({
+        let ui = ui.clone();
+        let weak = window.as_weak();
+        move |action| {
+            // `port mysql 3306`: move MeowServer's server to the project's port.
+            if let Some(rest) = action.strip_prefix("port ") {
+                let mut parts = rest.split(' ');
+                let kind = parts.next().and_then(Kind::from_id);
+                let port = parts.next().and_then(|p| p.parse::<u16>().ok());
+                if let (Some(kind), Some(port)) = (kind, port) {
+                    ui.run(move |layout, ui| actions::use_port(layout, ui, kind, port));
+                }
+                return;
+            }
+            // Anything else is something to install.
+            if let Some(w) = weak.upgrade() {
+                w.global::<Backend>().invoke_install_service(action);
+            }
+        }
+    });
     b.on_toggle_app({
         let ui = ui.clone();
         move |name, start| {
@@ -1231,6 +1251,19 @@ fn run_doctor(ui: &Ui) {
             .filter(|c| !c.ok)
             .map(|c| (c.name, c.detail, c.fix.unwrap_or_default()))
             .collect();
+        // For "Copy all": one block to paste into a chat or an issue.
+        let text: Vec<String> = problems
+            .iter()
+            .map(|(name, detail, fix)| {
+                let fix = if fix.is_empty() {
+                    String::new()
+                } else {
+                    format!("\n  {}", t("Fix: {}").replace("{}", fix))
+                };
+                format!("{name}: {detail}{fix}")
+            })
+            .collect();
+        let text = text.join("\n");
         ui.on_ui(move |w| {
             let rows = problems
                 .into_iter()
@@ -1241,7 +1274,9 @@ fn run_doctor(ui: &Ui) {
                     fix: fix.into(),
                 })
                 .collect();
-            w.global::<Backend>().set_problems(model(rows));
+            let b = w.global::<Backend>();
+            b.set_problems(model(rows));
+            b.set_problems_text(text.into());
         });
     });
 }

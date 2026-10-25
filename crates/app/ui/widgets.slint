@@ -61,6 +61,12 @@ export component Dot inherits Rectangle {
 export component Link inherits Text {
     callback clicked();
     color: Theme.accent;
+    // A button to screen readers and UI automation, not just text.
+    accessible-role: button;
+    accessible-label: root.text;
+    accessible-action-default => {
+        root.clicked();
+    }
     TouchArea {
         mouse-cursor: pointer;
         clicked => {

@@ -80,15 +80,21 @@ pub fn t(text: &str) -> String {
         "Copying projects and databases" => "Menyalin proyek dan database",
         "Needs PHP {}, but would run on PHP {}." => "Butuh PHP {}, tapi akan jalan di PHP {}.",
         "Install PHP {}" => "Pasang PHP {}",
+        "Connects to {} on port {}, but MeowServer's runs on {}." => {
+            "Terhubung ke {} di port {}, tapi milik MeowServer jalan di {}."
+        }
+        "Use port {} for {}" => "Pakai port {} untuk {}",
+        "Stopping the database that holds port {}…" => "Menghentikan database yang memakai port {}…",
+        "{} now uses port {}." => "{} sekarang memakai port {}.",
+        "Port {} is used by {}. Close that program first." => "Port {} dipakai {}. Tutup program itu dulu.",
+        "Port {} is used by MeowServer's {}." => "Port {} dipakai {} milik MeowServer.",
+        "Fix: {}" => "Solusi: {}",
         "Runs on {}, which is not installed." => "Berjalan dengan {}, yang belum terpasang.",
         "Needs {} {}; no installed version fits." => "Butuh {} {}; belum ada versi terpasang yang cocok.",
         "Install {} {}" => "Pasang {} {}",
         "Needs PHP {}; no PHP is installed." => "Butuh PHP {}; belum ada PHP yang terpasang.",
         "Uses {}, which is not installed." => "Memakai {}, yang belum terpasang.",
         "Install {}" => "Pasang {}",
-        "Connects to {} on port {}, but MeowServer's runs on {}. Change the port in the project's settings, or run a version on {} (Databases page)." => {
-            "Terhubung ke {} di port {}, tapi milik MeowServer jalan di {}. Ubah port di pengaturan proyek, atau jalankan satu versi di {} (halaman Database)."
-        }
         "{} {} runs on port {}." => "{} {} berjalan di port {}.",
         "{} {} stopped. Its data is kept." => "{} {} dihentikan. Datanya tetap disimpan.",
         "Trusted. Restart the browser if it was open." => {
