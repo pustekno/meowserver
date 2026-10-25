@@ -33,6 +33,9 @@ struct Running {
     units: BTreeMap<Unit, BTreeSet<String>>,
     web_reload: Option<Invocation>,
     warnings: Vec<String>,
+    /// Why a unit runs on another port than usual. Kept while the unit
+    /// runs: reloads (e.g. after meow.toml changes) must not hide it.
+    moved: BTreeMap<Unit, Vec<String>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -177,7 +180,7 @@ impl Engine {
         let config = Config::load(&self.layout).unwrap_or_default();
         let discovery = site::discover(&self.layout, &config);
         let mut warnings = discovery.warnings;
-        for w in &state.warnings {
+        for w in state.warnings.iter().chain(state.moved.values().flatten()) {
             if !warnings.contains(w) {
                 warnings.push(w.clone());
             }
@@ -203,14 +206,16 @@ impl Engine {
     }
 
     fn start_unit(&self, state: &mut Running, ctx: &Context, unit: Unit) -> Result<()> {
+        let moved = self.move_off_busy_ports(state, &ctx.config, unit)?;
+        let config = moved.as_ref().unwrap_or(&ctx.config);
         let specs: Vec<ProcessSpec> = match unit {
-            Unit::Mysql => vec![mysql::plan(&self.layout, &ctx.config, crate::service::Kind::Mysql)?],
-            Unit::Mariadb => vec![mysql::plan(&self.layout, &ctx.config, crate::service::Kind::Mariadb)?],
-            Unit::Postgres => vec![postgres::plan(&self.layout, &ctx.config)?],
-            Unit::Redis => vec![redis::plan(&self.layout, &ctx.config)?],
-            Unit::Mailpit => vec![mailpit::plan(&self.layout, &ctx.config)?],
+            Unit::Mysql => vec![mysql::plan(&self.layout, config, crate::service::Kind::Mysql)?],
+            Unit::Mariadb => vec![mysql::plan(&self.layout, config, crate::service::Kind::Mariadb)?],
+            Unit::Postgres => vec![postgres::plan(&self.layout, config)?],
+            Unit::Redis => vec![redis::plan(&self.layout, config)?],
+            Unit::Mailpit => vec![mailpit::plan(&self.layout, config)?],
             Unit::Php => {
-                let plan = php::plan(&self.layout, &ctx.config, &ctx.sites)?;
+                let plan = php::plan(&self.layout, config, &ctx.sites)?;
                 state.warnings.extend(plan.warnings.iter().cloned());
                 for pool in &plan.pools {
                     if pool.specs.iter().any(|s| !self.supervisor.is_running(&s.id)) {
@@ -222,16 +227,16 @@ impl Engine {
                 plan.pools.into_iter().flat_map(|p| p.specs).collect()
             }
             Unit::Web => {
-                let php_plan = php::plan(&self.layout, &ctx.config, &ctx.sites)?;
-                let planned = plan_web(&self.layout, &ctx.config, &ctx.sites, &php_plan)?;
+                let php_plan = php::plan(&self.layout, config, &ctx.sites)?;
+                let planned = plan_web(&self.layout, config, &ctx.sites, &php_plan)?;
                 if planned.spec.id == "caddy" && !self.supervisor.is_running("caddy") {
-                    self.ensure_port_free("caddy", ctx.config.port("caddy", caddy::DEFAULT_ADMIN_PORT))?;
+                    self.ensure_port_free("caddy", config.port("caddy", caddy::DEFAULT_ADMIN_PORT))?;
                 }
                 state.web_reload = planned.reload;
                 vec![planned.spec]
             }
         };
-        if let Some((name, port)) = unit_port(&ctx.config, unit) {
+        if let Some((name, port)) = unit_port(config, unit) {
             let fresh = specs.iter().any(|s| !self.supervisor.is_running(&s.id));
             if fresh {
                 self.ensure_port_free(name, port)?;
@@ -252,12 +257,7 @@ impl Engine {
     /// Refuses to start when another program holds the port, on any
     /// address, and names it (PRD F9, §8.7).
     fn ensure_port_free(&self, name: &str, port: u16) -> Result<()> {
-        let root = self.layout.root().to_string_lossy().to_lowercase();
-        let foreign: Vec<String> = platform::port_owners(port)
-            .into_iter()
-            .filter(|(_, exe)| !exe.to_lowercase().starts_with(&root))
-            .map(|(pid, exe)| format!("{exe} (pid {pid})"))
-            .collect();
+        let foreign = self.foreign_owners(port);
         if foreign.is_empty() {
             return Ok(());
         }
@@ -267,7 +267,78 @@ impl Engine {
         ))
     }
 
+    /// Programs from outside this MeowServer folder listening on `port`.
+    fn foreign_owners(&self, port: u16) -> Vec<String> {
+        let root = self.layout.root().to_string_lossy().to_lowercase();
+        platform::port_owners(port)
+            .into_iter()
+            .filter(|(_, exe)| !exe.to_lowercase().starts_with(&root))
+            .map(|(pid, exe)| format!("{exe} (pid {pid})"))
+            .collect()
+    }
+
+    /// When another program (Laragon's MySQL, another server on port 80)
+    /// holds one of `unit`'s ports, moves the service to the next free port
+    /// and saves that in meow.toml. Saved rather than chosen on each start,
+    /// so a project configured for the new port keeps working after the
+    /// other program quits. Returns the configuration to plan with when
+    /// something moved; with no free port, `ensure_port_free` reports it.
+    fn move_off_busy_ports(
+        &self,
+        state: &mut Running,
+        config: &Config,
+        unit: Unit,
+    ) -> Result<Option<Config>> {
+        let mut moved = config.clone();
+        let mut notes = Vec::new();
+        for (service, field, default, first) in listening_ports(unit) {
+            if field == PortField::Tls && !config.general.https {
+                continue;
+            }
+            let current = field.get(&moved, service, default);
+            let owners = self.foreign_owners(current);
+            if owners.is_empty() {
+                continue;
+            }
+            let taken: BTreeSet<u16> = Unit::ALL
+                .into_iter()
+                .flat_map(listening_ports)
+                .map(|(s, f, d, _)| f.get(&moved, s, d))
+                .collect();
+            let Some(free) = (first..first.saturating_add(200))
+                .find(|p| !taken.contains(p) && platform::port_owners(*p).is_empty() && can_bind(*p))
+            else {
+                continue;
+            };
+            field.set(&mut moved, service, free);
+            notes.push(format!(
+                "{service}: port {current} is used by {}, so MeowServer's {service} now uses port {free} \
+                 (saved in meow.toml; set [services.{service}] {} = {current} there to go back)",
+                owners.join(" and "),
+                field.key(),
+            ));
+        }
+        if notes.is_empty() {
+            return Ok(None);
+        }
+        // Write only the moved ports onto meow.toml as it is now.
+        let mut saved = Config::load(&self.layout)?;
+        for (service, field, default, _) in listening_ports(unit) {
+            let port = field.get(&moved, service, default);
+            if port != field.get(config, service, default) {
+                field.set(&mut saved, service, port);
+            }
+        }
+        saved.save(&self.layout)?;
+        for note in &notes {
+            log::warn!("{note}");
+        }
+        state.moved.insert(unit, notes);
+        Ok(Some(moved))
+    }
+
     fn stop_unit(&self, state: &mut Running, unit: Unit) {
+        state.moved.remove(&unit);
         let mut ids: BTreeSet<String> = state.units.remove(&unit).unwrap_or_default();
         // Include strays, e.g. a process started before a config change.
         ids.extend(self.supervisor.status().into_iter().map(|s| s.id).filter(|id| unit.owns(id)));
@@ -302,6 +373,64 @@ fn unit_port(config: &Config, unit: Unit) -> Option<(&'static str, u16)> {
         Unit::Mailpit => ("mailpit", config.port("mailpit", mailpit::SMTP_PORT)),
         Unit::Php => return None,
     })
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PortField {
+    Port,
+    Tls,
+    Web,
+}
+
+impl PortField {
+    fn get(self, config: &Config, service: &str, default: u16) -> u16 {
+        match self {
+            PortField::Port => config.port(service, default),
+            PortField::Tls => config.tls_port(service, default),
+            PortField::Web => config.web_port(service, default),
+        }
+    }
+
+    fn set(self, config: &mut Config, service: &str, port: u16) {
+        let settings = config.services.entry(service.into()).or_default();
+        match self {
+            PortField::Port => settings.port = Some(port),
+            PortField::Tls => settings.tls_port = Some(port),
+            PortField::Web => settings.web_port = Some(port),
+        }
+    }
+
+    fn key(self) -> &'static str {
+        match self {
+            PortField::Port => "port",
+            PortField::Tls => "tls_port",
+            PortField::Web => "web_port",
+        }
+    }
+}
+
+/// The ports a unit listens on that people and projects connect to, as
+/// (service, field, default, first port to try when it is taken).
+fn listening_ports(unit: Unit) -> Vec<(&'static str, PortField, u16, u16)> {
+    use PortField::{Port, Tls, Web};
+    match unit {
+        Unit::Web => vec![("web", Port, 80, 8080), ("web", Tls, 443, 8443)],
+        Unit::Mysql => vec![("mysql", Port, mysql::DEFAULT_PORT, 3307)],
+        Unit::Mariadb => vec![("mariadb", Port, mysql::DEFAULT_PORT, 3307)],
+        Unit::Postgres => vec![("postgres", Port, postgres::DEFAULT_PORT, 5433)],
+        Unit::Redis => vec![("redis", Port, redis::DEFAULT_PORT, 6380)],
+        Unit::Mailpit => {
+            vec![("mailpit", Port, mailpit::SMTP_PORT, 1026), ("mailpit", Web, mailpit::WEB_PORT, 8026)]
+        }
+        // Internal ports, configurable but never seen by projects.
+        Unit::Php => Vec::new(),
+    }
+}
+
+/// Windows reserves port ranges (Hyper-V, WSL) that nobody listens on but
+/// nobody may bind either, so "no listener" is not enough.
+fn can_bind(port: u16) -> bool {
+    std::net::TcpListener::bind(("127.0.0.1", port)).is_ok()
 }
 
 fn parse_unit(name: &str) -> Result<Unit> {

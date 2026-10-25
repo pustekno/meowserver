@@ -167,7 +167,9 @@ CLI: `meow link <path> [--name <name>]`, `meow unlink <name>`.
 admin rights, and removing it from MeowServer leaves the folder untouched.
 
 **F9 — Parked folders.** Register a folder whose every subfolder becomes a
-site, like `www/` (e.g. park `D:\projects`).
+site, like `www/` (e.g. park `D:\projects`). Junctions and symbolic links
+count as folders (Laragon users link projects from another drive into
+`www`); a link whose target is gone is reported, not silently skipped.
 CLI: `meow park <dir>`, `meow unpark <dir>`.
 *Done when:* a new subfolder in a parked folder becomes a site automatically,
 the same way as in `www/`.
@@ -378,6 +380,19 @@ and never compete for port 80. For projects that run their own dev server
 the user which port to start the dev server on.
 *Done when:* three projects with their own dev servers run side by side,
 each at its own `.localhost` name, without the user choosing ports.
+
+**F41 — Ports taken by other programs.** When another program (Laragon's
+MySQL, another web server) holds a port a service needs (web HTTP and HTTPS,
+MySQL, MariaDB, PostgreSQL, Redis, Mailpit), starting the service moves it to
+the next free port (3306 → 3307, 80 → 8080, …), saves that port in
+`meow.toml`, and says so on Home and in `meow status` while the service runs.
+The port is saved rather than chosen on every start, so a project whose
+`.env` names the new port keeps working after the other program quits.
+Doctor reports such a port as information, not a problem. Internal ports
+(the PHP pool, Caddy's admin port) still stop with a message naming the
+program.
+*Done when:* MeowServer starts next to a running Laragon without the user
+editing anything.
 
 ### 5.3 Out of scope
 
@@ -1132,6 +1147,7 @@ or another OS).
 | F18 local HTTPS | Tested; trust step needs a person | F38 problem reports | Tested (crash path built) |
 | F19 LAN access | Built | F39 Defender exclusions | Built (needs UAC) |
 | F20 Xdebug | Tested (PHP 8.4, 7.4) | F40 dev-server ports | Tested |
+| | | F41 ports taken by other programs | Tested (Redis moved off a taken port, note shown while running) |
 
 **Windows installer** (§15, `packaging/windows/`): tested. A scripted run installs per user, then updates to a newer build while MeowServer and its window are running, then uninstalls: projects, databases, downloads, and `etc/custom` are unchanged byte for byte, the PATH entry is added once and removed exactly, and the uninstaller undoes system changes. CI builds the installer and the zip on every push. Not signed yet, so SmartScreen warns on first run.
 
@@ -1184,6 +1200,7 @@ directly:
 | 2026-10-25 | Owner request: MeowServer's own errors can be reported by the user as a pre-filled GitHub issue; developers' site errors stay local (F38). |
 | 2026-10-25 | Owner request after slow Laragon sites on interns' laptops: performance rules in §8.7, Defender exclusions (F39), dev-server ports (F40). Evidence in ADR 0007. |
 | 2026-10-25 | Owner request: import is not Laragon-only. F27 now detects XAMPP, WampServer, and FlyEnv too, and shows the plan before copying. |
+| 2026-10-25 | Owner request: MySQL clashed with Laragon. Services now move to a free port and save it (F41). The `meow` command name may be taken by another program; Doctor reports which `meow` a terminal runs. |
 | 2026-10-25 | Owner request: a Windows installer for first install and updates that never deletes data. Inno Setup 6 (free for open source; the only build tool that is not Rust), per user without administrator rights, default `C:\MeowServer` because data lives next to the program; Program Files is refused. Updates replace only the program files; uninstall keeps `www`, `data`, `bin`, and settings. |
 
 No open questions remain for v1.0 scope. New questions are added here as they

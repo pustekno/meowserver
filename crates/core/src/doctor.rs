@@ -5,6 +5,8 @@
 //! `meow doctor` (PRD F32): finds what will stop MeowServer from working
 //! and says how to fix it.
 
+use std::path::PathBuf;
+
 use serde::{Deserialize, Serialize};
 
 use crate::config::Config;
@@ -113,10 +115,13 @@ pub fn run(layout: &Layout) -> Vec<Check> {
             .map(|(pid, exe)| format!("{exe} (pid {pid})"))
             .collect();
         if !foreign.is_empty() {
-            checks.push(Check::problem(
+            // Not a problem: starting moves the service to a free port.
+            checks.push(Check::ok(
                 format!("port {port}"),
-                format!("needed by {name}, but used by {}", foreign.join(" and ")),
-                format!("Stop that program, or set another port in meow.toml: [services.{name}] port = …"),
+                format!(
+                    "used by {}; {name} will use the next free port when it starts",
+                    foreign.join(" and ")
+                ),
             ));
         } else if owners.is_empty() {
             checks.push(Check::ok(format!("port {port}"), format!("free for {name}")));
@@ -223,12 +228,46 @@ pub fn run(layout: &Layout) -> Vec<Check> {
         }
     }
 
-    if platform::is_running("laragon.exe") {
+    // `meow` is a short name another program may also use; a terminal runs
+    // whichever comes first on PATH.
+    let ours = layout.root().join(format!("meow{}", platform::EXE_SUFFIX));
+    if ours.is_file()
+        && let Some(found) = meow_on_path()
+    {
+        let same = matches!((found.canonicalize(), ours.canonicalize()), (Ok(a), Ok(b)) if a == b);
+        if same {
+            checks.push(Check::ok("meow command", format!("a terminal runs {}", ours.display())));
+        } else {
+            checks.push(Check::problem(
+                "meow command",
+                format!("`meow` in a terminal runs {}, not this MeowServer", found.display()),
+                format!(
+                    "Run {} by its full path, or move {} before {} in PATH.",
+                    ours.display(),
+                    layout.root().display(),
+                    found.parent().map(|p| p.display().to_string()).unwrap_or_default()
+                ),
+            ));
+        }
+    }
+
+    // Ports move on their own; shared database files do not.
+    let in_place = config.services.values().any(|s| s.data_dir.is_some());
+    if in_place && platform::is_running("laragon.exe") {
         checks.push(Check::problem(
             "Laragon",
-            "Laragon is running and may hold the same ports or database files",
-            "Quit Laragon before starting MeowServer, or give MeowServer other ports.",
+            "Laragon is running, and MeowServer uses a database folder in place that Laragon may also use",
+            "Quit Laragon before starting MeowServer's databases, or import a copy instead (meow import).",
         ));
     }
     checks
+}
+
+/// The `meow` a new terminal would run: the first one on PATH, trying the
+/// extensions Windows runs from a command prompt.
+fn meow_on_path() -> Option<PathBuf> {
+    let names: &[&str] =
+        if cfg!(windows) { &["meow.com", "meow.exe", "meow.bat", "meow.cmd"] } else { &["meow"] };
+    let path = std::env::var_os("PATH")?;
+    std::env::split_paths(&path).find_map(|dir| names.iter().map(|n| dir.join(n)).find(|p| p.is_file()))
 }
