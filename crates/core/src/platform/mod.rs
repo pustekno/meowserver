@@ -63,10 +63,20 @@ pub fn is_running(exe_name: &str) -> bool {
     imp::process_names().iter().any(|(_, n)| n.eq_ignore_ascii_case(exe_name))
 }
 
+/// True when `path` is `root` or inside it, ignoring case. Compares whole
+/// folder names: `C:\MeowServer-0.1.0\caddy.exe` is not inside
+/// `C:\MeowServer`, although the text starts the same.
+pub fn is_inside(path: &str, root: &std::path::Path) -> bool {
+    let path = path.to_lowercase().replace('/', "\\");
+    let root = root.to_string_lossy().to_lowercase().replace('/', "\\");
+    let root = root.trim_end_matches('\\');
+    path == root || path.starts_with(&format!("{root}\\"))
+}
+
 /// True if a process named one of `stems` (without `.exe`) runs from inside
-/// `root` (lowercase). Where the full path is unknown, any such process
-/// counts, so callers err on the side of "in use".
-pub fn processes_under(root: &str, stems: &[&str]) -> bool {
+/// `root`. Where the full path is unknown, any such process counts, so
+/// callers err on the side of "in use".
+pub fn processes_under(root: &std::path::Path, stems: &[&str]) -> bool {
     imp::process_names().into_iter().any(|(pid, name)| {
         let lower = name.to_ascii_lowercase();
         let stem = lower.strip_suffix(".exe").unwrap_or(&lower);
@@ -74,9 +84,7 @@ pub fn processes_under(root: &str, stems: &[&str]) -> bool {
             return false;
         }
         match imp::process_path(pid) {
-            Some(path) if std::path::Path::new(&path).is_absolute() => {
-                path.to_lowercase().starts_with(root.trim_end_matches(['\\', '/']))
-            }
+            Some(path) if std::path::Path::new(&path).is_absolute() => is_inside(&path, root),
             _ => true,
         }
     })
@@ -151,4 +159,20 @@ pub fn os() -> Os {
 
 pub fn arch() -> Arch {
     if cfg!(target_arch = "aarch64") { Arch::Arm64 } else { Arch::X64 }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn inside_compares_whole_folder_names() {
+        let root = std::path::Path::new(r"C:\MeowServer");
+        assert!(is_inside(r"C:\MeowServer\bin\caddy\caddy.exe", root));
+        assert!(is_inside(r"c:\meowserver\meowd.exe", root), "case does not matter");
+        assert!(is_inside(r"C:\MeowServer", root));
+        assert!(!is_inside(r"C:\MeowServer-0.1.0\bin\caddy\caddy.exe", root), "a sibling folder");
+        assert!(!is_inside(r"C:\MeowServer2\meowd.exe", root));
+        assert!(is_inside(r"C:\MeowServer\x", std::path::Path::new(r"C:\MeowServer\")));
+    }
 }

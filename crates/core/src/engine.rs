@@ -96,7 +96,7 @@ impl Engine {
     /// alone. Keeps going when one fails and reports all failures.
     pub fn start(&self, units: &[Unit]) -> Result<()> {
         let mut state = self.state.lock().unwrap();
-        let ctx = self.context()?;
+        let mut ctx = self.context()?;
         state.warnings = ctx.warnings.clone();
         let mut wanted: BTreeSet<Unit> = units.iter().copied().collect();
         if wanted.contains(&Unit::Web) {
@@ -104,7 +104,7 @@ impl Engine {
         }
         let mut errors = Vec::new();
         for unit in Unit::ALL.into_iter().filter(|u| wanted.contains(u)) {
-            if let Err(e) = self.start_unit(&mut state, &ctx, unit) {
+            if let Err(e) = self.start_unit(&mut state, &mut ctx, unit) {
                 log::error!("{}: {e:#}", unit.id());
                 errors.push(format!("{}: {e:#}", unit.id()));
             }
@@ -205,9 +205,13 @@ impl Engine {
         Ok(Context { config, sites: discovery.sites, warnings: discovery.warnings })
     }
 
-    fn start_unit(&self, state: &mut Running, ctx: &Context, unit: Unit) -> Result<()> {
-        let moved = self.move_off_busy_ports(state, &ctx.config, unit)?;
-        let config = moved.as_ref().unwrap_or(&ctx.config);
+    fn start_unit(&self, state: &mut Running, ctx: &mut Context, unit: Unit) -> Result<()> {
+        // Units started after this one (the web server after PHP) plan with
+        // the moved ports too.
+        if let Some(moved) = self.move_off_busy_ports(state, &ctx.config, &ctx.sites, unit)? {
+            ctx.config = moved;
+        }
+        let config = &ctx.config;
         let specs: Vec<ProcessSpec> = match unit {
             Unit::Mysql => vec![mysql::plan(&self.layout, config, crate::service::Kind::Mysql)?],
             Unit::Mariadb => vec![mysql::plan(&self.layout, config, crate::service::Kind::Mariadb)?],
@@ -269,30 +273,38 @@ impl Engine {
 
     /// Programs from outside this MeowServer folder listening on `port`.
     fn foreign_owners(&self, port: u16) -> Vec<String> {
-        let root = self.layout.root().to_string_lossy().to_lowercase();
+        self.foreign_processes(port).into_iter().map(|(pid, exe)| format!("{exe} (pid {pid})")).collect()
+    }
+
+    fn foreign_processes(&self, port: u16) -> Vec<(u32, String)> {
         platform::port_owners(port)
             .into_iter()
-            .filter(|(_, exe)| !exe.to_lowercase().starts_with(&root))
-            .map(|(pid, exe)| format!("{exe} (pid {pid})"))
+            .filter(|(_, exe)| !platform::is_inside(exe, self.layout.root()))
             .collect()
     }
 
-    /// When another program (Laragon's MySQL, another server on port 80)
-    /// holds one of `unit`'s ports, moves the service to the next free port
-    /// and saves that in meow.toml. Saved rather than chosen on each start,
-    /// so a project configured for the new port keeps working after the
-    /// other program quits. Returns the configuration to plan with when
-    /// something moved; with no free port, `ensure_port_free` reports it.
+    /// When another program (Laragon's MySQL, another server on port 80,
+    /// a second MeowServer folder) holds one of `unit`'s ports, moves the
+    /// service to the next free port and saves that in meow.toml. Saved
+    /// rather than chosen on each start, so a project configured for the
+    /// new port keeps working after the other program quits. Returns the
+    /// configuration to plan with when something moved; with no free port,
+    /// `ensure_port_free` reports the clash.
     fn move_off_busy_ports(
         &self,
         state: &mut Running,
         config: &Config,
+        sites: &[Site],
         unit: Unit,
     ) -> Result<Option<Config>> {
         let mut moved = config.clone();
+        let mut changes: Vec<(&str, PortField, u16)> = Vec::new();
         let mut notes = Vec::new();
         for (service, field, default, first) in listening_ports(unit) {
             if field == PortField::Tls && !config.general.https {
+                continue;
+            }
+            if service == "caddy" && config.general.web_server != WebServer::Caddy {
                 continue;
             }
             let current = field.get(&moved, service, default);
@@ -305,12 +317,12 @@ impl Engine {
                 .flat_map(listening_ports)
                 .map(|(s, f, d, _)| f.get(&moved, s, d))
                 .collect();
-            let Some(free) = (first..first.saturating_add(200))
-                .find(|p| !taken.contains(p) && platform::port_owners(*p).is_empty() && can_bind(*p))
+            let Some(free) = (first..first.saturating_add(200)).find(|p| !taken.contains(p) && port_free(*p))
             else {
                 continue;
             };
             field.set(&mut moved, service, free);
+            changes.push((service, field, free));
             notes.push(format!(
                 "{service}: port {current} is used by {}, so MeowServer's {service} now uses port {free} \
                  (saved in meow.toml; set [services.{service}] {} = {current} there to go back)",
@@ -318,16 +330,24 @@ impl Engine {
                 field.key(),
             ));
         }
-        if notes.is_empty() {
+        if unit == Unit::Php
+            && let Some((base, owners)) = self.free_php_base(&moved, sites)
+        {
+            PortField::Port.set(&mut moved, "php", base);
+            changes.push(("php", PortField::Port, base));
+            notes.push(format!(
+                "php: its ports are used by {}, so MeowServer's PHP now uses ports from {base} \
+                 (saved in meow.toml as [services.php] port)",
+                owners.join(" and ")
+            ));
+        }
+        if changes.is_empty() {
             return Ok(None);
         }
         // Write only the moved ports onto meow.toml as it is now.
         let mut saved = Config::load(&self.layout)?;
-        for (service, field, default, _) in listening_ports(unit) {
-            let port = field.get(&moved, service, default);
-            if port != field.get(config, service, default) {
-                field.set(&mut saved, service, port);
-            }
+        for (service, field, port) in changes {
+            field.set(&mut saved, service, port);
         }
         saved.save(&self.layout)?;
         for note in &notes {
@@ -335,6 +355,37 @@ impl Engine {
         }
         state.moved.insert(unit, notes);
         Ok(Some(moved))
+    }
+
+    /// When another program holds one of the PHP pools' FastCGI ports, the
+    /// first base (in steps of 1000) where every pool port is free, with
+    /// the programs that were in the way. `None` when nothing is in the way
+    /// or no base is free; `ensure_port_free` then has the last word.
+    fn free_php_base(&self, config: &Config, sites: &[Site]) -> Option<(u16, Vec<String>)> {
+        let ports = |config: &Config| -> Vec<u16> {
+            php::plan(&self.layout, config, sites)
+                .map(|plan| plan.pools.iter().flat_map(|p| p.ports()).collect())
+                .unwrap_or_default()
+        };
+        // A pool is many processes of one program: name the program once.
+        let mut owners: Vec<String> =
+            ports(config).into_iter().flat_map(|p| self.foreign_processes(p)).map(|(_, exe)| exe).collect();
+        if owners.is_empty() {
+            return None;
+        }
+        owners.sort();
+        owners.dedup();
+        let current = config.port("php", php::DEFAULT_PORT_BASE);
+        (1..=40u16)
+            .map(|step| php::DEFAULT_PORT_BASE + step * 1000)
+            .take_while(|base| *base <= 64_000)
+            .filter(|base| *base != current)
+            .find(|base| {
+                let mut candidate = config.clone();
+                PortField::Port.set(&mut candidate, "php", *base);
+                ports(&candidate).into_iter().all(port_free)
+            })
+            .map(|base| (base, owners))
     }
 
     fn stop_unit(&self, state: &mut Running, unit: Unit) {
@@ -414,7 +465,13 @@ impl PortField {
 fn listening_ports(unit: Unit) -> Vec<(&'static str, PortField, u16, u16)> {
     use PortField::{Port, Tls, Web};
     match unit {
-        Unit::Web => vec![("web", Port, 80, 8080), ("web", Tls, 443, 8443)],
+        Unit::Web => vec![
+            ("web", Port, 80, 8080),
+            ("web", Tls, 443, 8443),
+            // Internal, but a second MeowServer folder wants the same one.
+            // 19990–: between the default PHP ports and moved PHP bases.
+            ("caddy", Port, caddy::DEFAULT_ADMIN_PORT, 19_990),
+        ],
         Unit::Mysql => vec![("mysql", Port, mysql::DEFAULT_PORT, 3307)],
         Unit::Mariadb => vec![("mariadb", Port, mysql::DEFAULT_PORT, 3307)],
         Unit::Postgres => vec![("postgres", Port, postgres::DEFAULT_PORT, 5433)],
@@ -427,10 +484,10 @@ fn listening_ports(unit: Unit) -> Vec<(&'static str, PortField, u16, u16)> {
     }
 }
 
-/// Windows reserves port ranges (Hyper-V, WSL) that nobody listens on but
-/// nobody may bind either, so "no listener" is not enough.
-fn can_bind(port: u16) -> bool {
-    std::net::TcpListener::bind(("127.0.0.1", port)).is_ok()
+/// Nobody listens on `port` and it can be bound: Windows reserves port
+/// ranges (Hyper-V, WSL) that have no listener yet refuse to bind.
+fn port_free(port: u16) -> bool {
+    platform::port_owners(port).is_empty() && std::net::TcpListener::bind(("127.0.0.1", port)).is_ok()
 }
 
 fn parse_unit(name: &str) -> Result<Unit> {

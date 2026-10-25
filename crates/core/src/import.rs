@@ -370,8 +370,8 @@ fn binary_version(server: &Path) -> Option<(Kind, Version)> {
 /// A database server of `source` is running, so its data files are in use
 /// and a copy would be torn. Only matters when there is data to import.
 pub fn in_use(source: &Source) -> bool {
-    let root = source.root.to_string_lossy().to_lowercase();
-    !source.databases.is_empty() && platform::processes_under(&root, &["mysqld", "mariadbd", "postgres"])
+    !source.databases.is_empty()
+        && platform::processes_under(&source.root, &["mysqld", "mariadbd", "postgres"])
 }
 
 /// What [`apply`] would do, as lines for the user to confirm.

@@ -389,8 +389,11 @@ the next free port (3306 → 3307, 80 → 8080, …), saves that port in
 The port is saved rather than chosen on every start, so a project whose
 `.env` names the new port keeps working after the other program quits.
 Doctor reports such a port as information, not a problem. Internal ports
-(the PHP pool, Caddy's admin port) still stop with a message naming the
-program.
+move the same way, so two MeowServer folders can run side by side: Caddy's
+admin port (19999 -> 19990-) and the PHP pools (base 19000 -> 20000, 21000,
+...). A process counts as MeowServer's own only when it runs from inside
+this folder, compared by whole folder names (`C:\MeowServer-0.1.0` is not
+inside `C:\MeowServer`).
 *Done when:* MeowServer starts next to a running Laragon without the user
 editing anything.
 

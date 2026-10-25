@@ -95,7 +95,6 @@ pub fn run(layout: &Layout) -> Vec<Check> {
             Unit::Php => {}
         }
     }
-    let root = layout.root().to_string_lossy().to_lowercase();
     for (name, port) in &ports {
         if let Some(clash) = ports.iter().find(|(n, p)| p == port && n < name) {
             checks.push(Check::problem(
@@ -111,7 +110,7 @@ pub fn run(layout: &Layout) -> Vec<Check> {
         let owners = platform::port_owners(*port);
         let foreign: Vec<String> = owners
             .iter()
-            .filter(|(_, exe)| !exe.to_lowercase().starts_with(&root))
+            .filter(|(_, exe)| !platform::is_inside(exe, layout.root()))
             .map(|(pid, exe)| format!("{exe} (pid {pid})"))
             .collect();
         if !foreign.is_empty() {
