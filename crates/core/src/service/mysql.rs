@@ -36,16 +36,71 @@ struct IniContext {
     custom_dir: PathBuf,
 }
 
-pub fn plan(layout: &Layout, config: &Config, kind: Kind) -> Result<ProcessSpec> {
-    debug_assert!(matches!(kind, Kind::Mysql | Kind::Mariadb));
-    let name = if kind == Kind::Mysql { "MySQL" } else { "MariaDB" };
+/// One server of a MySQL or MariaDB unit: the default version, or one of
+/// `[services.<kind>.extra]`.
+pub struct Instance {
+    pub installed: Installed,
+    pub port: u16,
+    pub data: PathBuf,
+    /// Supervisor id: `mysql` for the default, `mysql-5.7` for the others.
+    pub id: String,
+}
+
+/// Every server of `kind` that should run, default first. A missing extra
+/// version becomes a warning, so it never stops the default one.
+pub fn instances(layout: &Layout, config: &Config, kind: Kind) -> Result<(Vec<Instance>, Vec<String>)> {
+    let name = product(kind);
     let Some(installed) = super::select(layout, kind, config.version_selector(kind.id())) else {
         bail!("{name} is not installed. Run `meow install {}`.", kind.id());
     };
+    let default_line = datadir::line(kind, &installed.version);
+    let mut out = vec![Instance {
+        port: config.port(kind.id(), DEFAULT_PORT),
+        data: datadir::path(layout, config, kind, &installed.version),
+        id: kind.id().into(),
+        installed,
+    }];
+    let mut warnings = Vec::new();
+    let extra = config.services.get(kind.id()).map(|s| s.extra.clone()).unwrap_or_default();
+    for (line, port) in extra {
+        if line == default_line {
+            continue;
+        }
+        match super::select(layout, kind, Some(&line)) {
+            Some(installed) => out.push(Instance {
+                port,
+                data: layout.data().join(format!("{}-{line}", kind.id())),
+                id: format!("{}-{line}", kind.id()),
+                installed,
+            }),
+            None => warnings.push(format!(
+                "{name} {line} is set to run on port {port} but is not installed: meow install {} {line}",
+                kind.id()
+            )),
+        }
+    }
+    Ok((out, warnings))
+}
+
+fn product(kind: Kind) -> &'static str {
+    if kind == Kind::Mysql { "MySQL" } else { "MariaDB" }
+}
+
+/// The servers of a MySQL or MariaDB unit, plus warnings.
+pub fn plan(layout: &Layout, config: &Config, kind: Kind) -> Result<(Vec<ProcessSpec>, Vec<String>)> {
+    debug_assert!(matches!(kind, Kind::Mysql | Kind::Mariadb));
+    let (instances, warnings) = instances(layout, config, kind)?;
+    let specs = instances.iter().map(|i| plan_one(layout, kind, i)).collect::<Result<_>>()?;
+    Ok((specs, warnings))
+}
+
+fn plan_one(layout: &Layout, kind: Kind, instance: &Instance) -> Result<ProcessSpec> {
+    let name = product(kind);
+    let installed = &instance.installed;
     let version = &installed.version;
     let line = datadir::line(kind, version);
-    let port = config.port(kind.id(), DEFAULT_PORT);
-    let data = datadir::path(layout, config, kind, version);
+    let port = instance.port;
+    let data = instance.data.clone();
     let needs_init = datadir::check(&data, kind, version)?;
 
     let custom = layout.custom().join(kind.id());
@@ -71,19 +126,19 @@ pub fn plan(layout: &Layout, config: &Config, kind: Kind) -> Result<ProcessSpec>
     write_generated(&ini, &template::render("mysql/my.ini", ctx)?)?;
 
     if needs_init {
-        initialize(layout, kind, &installed, &ini, &data)?;
+        initialize(layout, kind, installed, &ini, &data)?;
     }
 
     let defaults = format!("--defaults-file={}", ini.display());
-    let server = server_exe(kind, &installed);
-    let admin = tool(&installed, if kind == Kind::Mysql { "mysqladmin" } else { "mariadb-admin" });
+    let server = server_exe(kind, installed);
+    let admin = tool(installed, if kind == Kind::Mysql { "mysqladmin" } else { "mariadb-admin" });
     Ok(ProcessSpec {
-        id: kind.id().into(),
+        id: instance.id.clone(),
         program: server,
         args: vec![defaults.into()],
         env: Vec::new(),
         cwd: Some(installed.dir.clone()),
-        log: layout.logs().join(format!("{}.log", kind.id())),
+        log: layout.logs().join(format!("{}.log", instance.id)),
         restart: Restart::OnFailure,
         graceful_stop: Some(Invocation {
             program: admin,
@@ -109,14 +164,20 @@ pub fn after_start(layout: &Layout, config: &Config, kind: Kind) {
     if kind != Kind::Mariadb {
         return;
     }
-    let Some(installed) = super::select(layout, kind, config.version_selector(kind.id())) else { return };
-    let flag = datadir::path(layout, config, kind, &installed.version).join(datadir::PENDING_UPGRADE);
+    let Ok((instances, _)) = instances(layout, config, kind) else { return };
+    for instance in instances {
+        upgrade_when_flagged(instance);
+    }
+}
+
+fn upgrade_when_flagged(instance: Instance) {
+    let flag = instance.data.join(datadir::PENDING_UPGRADE);
     if !flag.exists() {
         return;
     }
-    let port = config.port(kind.id(), DEFAULT_PORT).to_string();
-    let upgrade = tool(&installed, "mariadb-upgrade");
-    let client = tool(&installed, "mariadb-admin");
+    let port = instance.port.to_string();
+    let upgrade = tool(&instance.installed, "mariadb-upgrade");
+    let client = tool(&instance.installed, "mariadb-admin");
     std::thread::spawn(move || {
         let quiet = |cmd: &mut Command| {
             cmd.stdin(Stdio::null())

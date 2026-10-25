@@ -57,6 +57,14 @@ pub enum Suffix {
 }
 
 impl Suffix {
+    pub fn parse(text: &str) -> Option<Suffix> {
+        match text.trim_start_matches('.') {
+            "localhost" => Some(Suffix::Localhost),
+            "test" => Some(Suffix::Test),
+            _ => None,
+        }
+    }
+
     pub fn as_str(self) -> &'static str {
         match self {
             Suffix::Localhost => "localhost",
@@ -83,6 +91,17 @@ pub struct ServiceSettings {
     /// Database data folder, when not the default `data/<service>-<version>`
     /// (e.g. Laragon's, used in place; PRD F27).
     pub data_dir: Option<PathBuf>,
+    /// More versions of this database running next to the default one, by
+    /// line, each on its own port and with its own data (PRD F24): projects
+    /// pick one through the port in their settings.
+    /// `[services.mysql.extra]` with `"5.7" = 3307`.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub extra: BTreeMap<String, u16>,
+    /// The usual port of a field (`port`, `tls_port`, `web_port`) that
+    /// MeowServer moved because another program held it. The service goes
+    /// back to it once it is free. Delete the entry to keep the new port.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub moved_from: BTreeMap<String, u16>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -108,6 +127,9 @@ pub struct SiteSettings {
     /// Proxy target such as `http://127.0.0.1:3000` (PRD F12).
     pub proxy: Option<String>,
     pub force_https: bool,
+    /// Domain ending for this site when not `general.suffix`: `.test` for
+    /// projects brought from Laragon, whose settings and data name it.
+    pub suffix: Option<Suffix>,
 }
 
 impl Default for Config {

@@ -120,6 +120,10 @@ impl Unit {
         match self {
             Unit::Web => matches!(process_id, "caddy" | "nginx" | "apache"),
             Unit::Php => process_id.starts_with("php-"),
+            // `mysql`, and `mysql-5.7` for a version running next to it.
+            Unit::Mysql | Unit::Mariadb => process_id
+                .strip_prefix(self.id())
+                .is_some_and(|rest| rest.is_empty() || rest.starts_with('-')),
             other => process_id == other.id(),
         }
     }

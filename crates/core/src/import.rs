@@ -16,7 +16,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result, bail};
 use serde::Serialize;
 
-use crate::config::Config;
+use crate::config::{Config, Suffix};
 use crate::ipc::{Client, Request};
 use crate::layout::Layout;
 use crate::platform::{self, EXE_SUFFIX, Os, os};
@@ -65,19 +65,35 @@ impl Tool {
 pub struct Source {
     pub tool: Tool,
     pub root: PathBuf,
-    /// Folders whose subfolders are all sites (Laragon's `www`).
+    /// Folders outside the tool whose subfolders are all sites, parked as
+    /// they are. The tool's own `www` is taken apart into `projects`
+    /// instead, so nothing depends on the tool's folder afterwards.
     pub parked: Vec<PathBuf>,
-    /// Individual project folders (XAMPP `htdocs`, Wamp `www`, FlyEnv sites).
+    /// Individual projects (Laragon's and Wamp's `www`, XAMPP's `htdocs`,
+    /// FlyEnv's sites).
     pub projects: Vec<Project>,
     pub databases: Vec<Database>,
+    /// The PHP line the tool runs, so projects keep the same version.
+    pub php: Option<String>,
+    /// Links in the tool's `www` whose target is gone, as text to show.
+    pub broken: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
 pub struct Project {
     pub name: String,
+    /// The real folder: a link in the tool's `www` is followed.
     pub path: PathBuf,
     /// PHP line the other tool used for it, when it records one.
     pub php: Option<String>,
+    /// Stored inside the tool's folder, so it is copied into MeowServer's
+    /// `www` (uninstalling the tool would delete it). Otherwise it is
+    /// served where it is.
+    pub copy: bool,
+    pub bytes: u64,
+    /// Domain ending the tool gave it (`.test` for Laragon), kept so URLs
+    /// in the project's settings and database still work.
+    pub suffix: Option<Suffix>,
 }
 
 #[derive(Debug, Serialize)]
@@ -100,6 +116,18 @@ pub enum Mode {
 impl Source {
     pub fn is_empty(&self) -> bool {
         self.parked.is_empty() && self.projects.is_empty() && self.databases.is_empty()
+    }
+
+    fn new(tool: Tool, root: &Path) -> Self {
+        Source {
+            tool,
+            root: root.to_path_buf(),
+            parked: Vec::new(),
+            projects: Vec::new(),
+            databases: Vec::new(),
+            php: None,
+            broken: Vec::new(),
+        }
     }
 }
 
@@ -170,8 +198,50 @@ fn laragon(root: &Path) -> Option<Source> {
         .find_map(|l| l.strip_prefix("DataDir="))
         .map(|p| PathBuf::from(p.trim()))
         .unwrap_or_else(|| root.join("data"));
-    let databases = subdirs(&data_root).iter().filter_map(|d| database(d, None)).collect();
-    Some(Source { tool: Tool::Laragon, root: root.to_path_buf(), parked, projects: Vec::new(), databases })
+    let mut source = Source::new(Tool::Laragon, root);
+    // Laragon names every site `<folder>.test` unless told otherwise.
+    for dir in parked {
+        if platform::is_inside(&dir.to_string_lossy(), root) {
+            projects_in(&mut source, &dir, &[], Some(Suffix::Test));
+        } else {
+            source.parked.push(dir);
+        }
+    }
+    source.databases = subdirs(&data_root).iter().filter_map(|d| database(d, None)).collect();
+    source.php = laragon_php(root, &ini);
+    Some(source)
+}
+
+/// The PHP line Laragon serves sites with: `[php] Version=` when set, else
+/// the build its Apache loads, else the newest folder in `bin\php`. (PHP
+/// processes seen running may be command-line ones from an editor.)
+fn laragon_php(root: &Path, ini: &str) -> Option<String> {
+    let line_of = |name: &str| {
+        let digits = name.trim_start_matches(|c: char| !c.is_ascii_digit());
+        digits.split(['-', '_']).next()?.parse::<Version>().ok().map(|v| v.line())
+    };
+    let mut in_php = false;
+    for l in ini.lines().map(str::trim) {
+        if l.starts_with('[') {
+            in_php = l.eq_ignore_ascii_case("[php]");
+        } else if in_php && let Some(v) = l.strip_prefix("Version=") {
+            return line_of(v);
+        }
+    }
+    // The build Apache loads: LoadModule php_module "C:/laragon/bin/php/php-8.5.10-…/…dll"
+    let module =
+        std::fs::read_to_string(root.join("etc").join("apache2").join("mod_php.conf")).unwrap_or_default();
+    if let Some(line) = module
+        .lines()
+        .filter(|l| l.trim_start().starts_with("LoadModule"))
+        .find_map(|l| l.split(['/', '\\']).find(|part| part.starts_with("php-")).and_then(line_of))
+    {
+        return Some(line);
+    }
+    subdirs(&root.join("bin").join("php"))
+        .iter()
+        .filter_map(|d| line_of(&d.file_name()?.to_string_lossy()))
+        .max_by_key(|l| l.parse::<Version>().ok())
 }
 
 fn xampp(root: &Path) -> Option<Source> {
@@ -181,10 +251,12 @@ fn xampp(root: &Path) -> Option<Source> {
     }
     // Folders XAMPP ships in htdocs; not the user's projects.
     let skip = ["dashboard", "img", "webalizer", "xampp", "forbidden", "restricted"];
-    let projects = projects_in(&htdocs, &skip);
+    let mut source = Source::new(Tool::Xampp, root);
+    projects_in(&mut source, &htdocs, &skip, None);
     let server = root.join("mysql").join("bin").join(format!("mysqld{EXE_SUFFIX}"));
     let databases = database(&root.join("mysql").join("data"), Some(&server)).into_iter().collect();
-    Some(Source { tool: Tool::Xampp, root: root.to_path_buf(), parked: Vec::new(), projects, databases })
+    source.databases = databases;
+    Some(source)
 }
 
 fn wamp(root: &Path) -> Option<Source> {
@@ -192,7 +264,8 @@ fn wamp(root: &Path) -> Option<Source> {
     if !www.is_dir() || !(root.join("wampmanager.exe").exists() || root.join("bin").is_dir()) {
         return None;
     }
-    let projects = projects_in(&www, &["wamplangues", "wampthemes"]);
+    let mut source = Source::new(Tool::Wamp, root);
+    projects_in(&mut source, &www, &["wamplangues", "wampthemes"], None);
     // bin/mysql/mysql8.3.0/data, bin/mariadb/mariadb11.3.2/data
     let mut databases = Vec::new();
     for family in ["mysql", "mariadb"] {
@@ -201,7 +274,8 @@ fn wamp(root: &Path) -> Option<Source> {
             databases.extend(database(&dir.join("data"), Some(&server)));
         }
     }
-    Some(Source { tool: Tool::Wamp, root: root.to_path_buf(), parked: Vec::new(), projects, databases })
+    source.databases = databases;
+    Some(source)
 }
 
 /// FlyEnv keeps its data in `FlyEnv-Data` (older: `PhpWebStudy-Data`) two
@@ -270,7 +344,8 @@ fn flyenv(root: &Path) -> Option<Source> {
                 continue;
             };
             let php = h.get("phpVersion").and_then(flyenv_php);
-            projects.push(Project { name, path, php });
+            let suffix = host.ends_with(".test").then_some(Suffix::Test);
+            projects.push(Project { name, path, php, copy: false, bytes: 0, suffix });
         }
     }
     let mut databases = Vec::new();
@@ -281,7 +356,10 @@ fn flyenv(root: &Path) -> Option<Source> {
             }
         }
     }
-    Some(Source { tool: Tool::FlyEnv, root: root.to_path_buf(), parked: Vec::new(), projects, databases })
+    let mut source = Source::new(Tool::FlyEnv, root);
+    source.projects = projects;
+    source.databases = databases;
+    Some(source)
 }
 
 /// FlyEnv records PHP as a number: `84` or `8.4`.
@@ -307,19 +385,41 @@ fn subdirs(dir: &Path) -> Vec<PathBuf> {
     out
 }
 
-fn projects_in(dir: &Path, skip: &[&str]) -> Vec<Project> {
-    subdirs(dir)
-        .into_iter()
-        .filter(|p| {
-            let name = p.file_name().map(|n| n.to_string_lossy().to_lowercase()).unwrap_or_default();
-            !skip.contains(&name.as_str()) && !name.starts_with('.')
-        })
-        .map(|path| Project {
-            name: path.file_name().unwrap().to_string_lossy().into_owned(),
-            path,
-            php: None,
-        })
-        .collect()
+/// The projects in a tool's `www`. A folder stored there is copied on
+/// import; a link (how Laragon users bring in projects from another drive)
+/// is followed and served where it points; a broken link is reported.
+fn projects_in(source: &mut Source, dir: &Path, skip: &[&str], suffix: Option<Suffix>) {
+    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    let mut entries: Vec<std::fs::DirEntry> = entries.filter_map(Result::ok).collect();
+    entries.sort_by_key(|e| e.file_name());
+    for entry in entries {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let lower = name.to_lowercase();
+        if skip.contains(&lower.as_str()) || lower.starts_with('.') {
+            continue;
+        }
+        let path = entry.path();
+        let link = entry.file_type().is_ok_and(|t| t.is_symlink());
+        if !path.is_dir() {
+            if link {
+                let target = std::fs::read_link(&path).unwrap_or_default();
+                source.broken.push(format!("{} -> {}", path.display(), target.display()));
+            }
+            continue;
+        }
+        let (path, copy) = if link { (real_path(&path), false) } else { (path, true) };
+        let bytes = if copy { size(&path) } else { 0 };
+        source.projects.push(Project { name, path, php: None, copy, bytes, suffix });
+    }
+}
+
+/// Where a link really points, without the `\\?\` prefix Windows adds.
+fn real_path(path: &Path) -> PathBuf {
+    let Ok(real) = std::fs::canonicalize(path) else { return path.to_path_buf() };
+    match real.to_string_lossy().strip_prefix(r"\\?\") {
+        Some(rest) if !rest.starts_with("UNC\\") => PathBuf::from(rest),
+        _ => real,
+    }
 }
 
 /// A MySQL/MariaDB data folder, recognised from its own files, else from
@@ -435,9 +535,30 @@ pub fn describe(layout: &Layout, source: &Source, mode: Mode) -> Vec<String> {
     for dir in &source.parked {
         out.push(format!("Serve every folder in {} as a site (where it is, nothing moved).", dir.display()));
     }
+    let www = layout.root().join("www");
     for p in &source.projects {
         let php = p.php.as_deref().map(|v| format!(", PHP {v}")).unwrap_or_default();
-        out.push(format!("Serve {} as {}{php} (where it is, nothing moved).", p.path.display(), p.name));
+        let host = format!(
+            "{}.{}",
+            site::slugify(&p.name).unwrap_or_default(),
+            p.suffix.unwrap_or(Suffix::Localhost).as_str()
+        );
+        if p.copy {
+            out.push(format!(
+                "Copy {} ({}) into {} and serve it as {host}{php}.",
+                p.path.display(),
+                human(p.bytes),
+                www.join(&p.name).display()
+            ));
+        } else {
+            out.push(format!("Serve {} as {host}{php} (where it is, nothing moved).", p.path.display()));
+        }
+    }
+    for link in &source.broken {
+        out.push(format!("Skip {link}: the link's target does not exist."));
+    }
+    if let Some(php) = &source.php {
+        out.push(format!("Make PHP {php} the default, as in {}.", source.tool.name()));
     }
     for db in &source.databases {
         let version = db.version.clone().unwrap_or_else(|| "unknown version".into());
@@ -496,19 +617,77 @@ pub fn apply(
             Err(e) => notes.push(format!("skipped {}: {e:#}", dir.display())),
         }
     }
-    for p in &source.projects {
-        match manage::link(layout, config, &p.path, Some(&p.name)) {
-            Ok(name) => {
-                if let Some(php) = &p.php {
-                    manage::settings(config, &name).php = Some(php.clone());
-                }
-                notes.push(format!("{} → {name}.{}", p.path.display(), config.general.suffix.as_str()));
-            }
-            Err(e) => notes.push(format!("skipped {}: {e:#}", p.path.display())),
+    // The tool's own www, parked by an earlier import: its projects are
+    // now added one by one, so they must not show up twice.
+    let inside: Vec<PathBuf> = config
+        .general
+        .parked
+        .iter()
+        .filter(|p| platform::is_inside(&p.to_string_lossy(), &source.root))
+        .cloned()
+        .collect();
+    for dir in inside {
+        if manage::unpark(config, &dir).is_ok() {
+            notes.push(format!("{} is no longer parked; its projects are added one by one", dir.display()));
         }
     }
-    let total: u64 = source.databases.iter().map(|d| d.bytes).sum();
+    let total: u64 = source.databases.iter().map(|d| d.bytes).sum::<u64>()
+        + source.projects.iter().filter(|p| p.copy).map(|p| p.bytes).sum::<u64>();
     let mut done = 0u64;
+    let www = layout.resolve(&config.general.www);
+    for p in &source.projects {
+        let name = if p.copy {
+            let dest = www.join(&p.name);
+            if dest.exists() {
+                notes.push(format!("skipped {}: {} already exists", p.path.display(), dest.display()));
+                continue;
+            }
+            let staging = sibling(&dest, ".importing");
+            let _ = std::fs::remove_dir_all(&staging);
+            let copied = copy_dir(&p.path, &staging, &mut |n| {
+                done += n;
+                progress(done, total);
+            })
+            .and_then(|()| Ok(std::fs::rename(&staging, &dest)?));
+            if let Err(e) = copied {
+                let _ = std::fs::remove_dir_all(&staging);
+                return Err(e.context(format!("copying {}", p.path.display())));
+            }
+            notes.push(format!("copied {} to {}", p.path.display(), dest.display()));
+            match site::slugify(&p.name) {
+                Some(name) => name,
+                None => continue,
+            }
+        } else {
+            match manage::link(layout, config, &p.path, Some(&p.name)) {
+                Ok(name) => name,
+                Err(e) => {
+                    notes.push(format!("skipped {}: {e:#}", p.path.display()));
+                    continue;
+                }
+            }
+        };
+        let settings = manage::settings(config, &name);
+        if let Some(php) = &p.php {
+            settings.php = Some(php.clone());
+        }
+        if let Some(suffix) = p.suffix {
+            settings.suffix = Some(suffix);
+        }
+        let suffix = p.suffix.unwrap_or(config.general.suffix);
+        notes.push(format!("{} → {name}.{}", p.path.display(), suffix.as_str()));
+    }
+    if let Some(line) = &source.php {
+        if service::select(layout, Kind::Php, Some(line)).is_some() {
+            config.versions.insert("php".into(), line.clone());
+            notes.push(format!("PHP {line} is now the default, as in {}", source.tool.name()));
+        } else {
+            notes.push(format!(
+                "install PHP {line}, the version {} used: meow install php {line}",
+                source.tool.name()
+            ));
+        }
+    }
     // MeowServer's own database servers stopped to swap their data.
     let mut restart: Vec<&str> = Vec::new();
     for db in &source.databases {
@@ -665,18 +844,75 @@ fn size(dir: &Path) -> u64 {
 }
 
 fn copy_dir(from: &Path, to: &Path, progress: &mut dyn FnMut(u64)) -> Result<()> {
+    copy_tree(from, to, (from, to), progress)
+}
+
+/// Copies `from` into `to`; `roots` maps a link pointing inside the copied
+/// tree to the same place in the copy.
+fn copy_tree(from: &Path, to: &Path, roots: (&Path, &Path), progress: &mut dyn FnMut(u64)) -> Result<()> {
     std::fs::create_dir_all(to)?;
     for entry in std::fs::read_dir(from)? {
         let entry = entry?;
         let dest = to.join(entry.file_name());
-        if entry.file_type()?.is_dir() {
-            copy_dir(&entry.path(), &dest, progress)?;
+        let kind = entry.file_type()?;
+        if kind.is_symlink() {
+            copy_link(&entry.path(), &dest, roots, progress)?;
+        } else if kind.is_dir() {
+            copy_tree(&entry.path(), &dest, roots, progress)?;
         } else {
             let n = std::fs::copy(entry.path(), &dest)?;
             progress(n);
         }
     }
     Ok(())
+}
+
+/// A link inside a copied project, such as Laravel's `public/storage`:
+/// pointing into the project, it is made again pointing into the copy;
+/// pointing elsewhere, at the same place. A file link becomes a copy of
+/// the file; a broken link is left out.
+fn copy_link(
+    link: &Path,
+    dest: &Path,
+    (src, dst): (&Path, &Path),
+    progress: &mut dyn FnMut(u64),
+) -> Result<()> {
+    let Ok(target) = std::fs::read_link(link) else { return Ok(()) };
+    let target =
+        real_path(&if target.is_absolute() { target } else { link.parent().unwrap_or(src).join(target) });
+    let src = real_path(src);
+    let mapped = target.strip_prefix(&src).map(|rest| dst.join(rest)).unwrap_or_else(|_| target.clone());
+    if target.is_dir() {
+        if !make_dir_link(&mapped, dest) {
+            log::warn!("import: could not recreate the link {} -> {}", dest.display(), mapped.display());
+        }
+    } else if target.is_file() {
+        progress(std::fs::copy(&target, dest)?);
+    }
+    Ok(())
+}
+
+/// A directory link: a junction on Windows (no administrator rights
+/// needed; the target may not exist yet), a symbolic link elsewhere.
+fn make_dir_link(target: &Path, link: &Path) -> bool {
+    #[cfg(windows)]
+    {
+        // `mklink` takes backslashes only.
+        let native = |p: &Path| p.to_string_lossy().replace('/', "\\");
+        Command::new("cmd")
+            .args(["/C", "mklink", "/J"])
+            .arg(native(link))
+            .arg(native(target))
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .is_ok_and(|s| s.success())
+    }
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(target, link).is_ok()
+    }
 }
 
 pub fn human(bytes: u64) -> String {
@@ -779,6 +1015,25 @@ mod tests {
         let notes = apply(&layout, &mut config, &source, Mode::Copy, &mut |_, _| {}).unwrap();
         assert!(notes.iter().any(|n| n.contains("already has databases")), "{notes:?}");
         assert_eq!(std::fs::read_to_string(dest.join("shop").join("orders.ibd")).unwrap(), "newer rows");
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn copied_project_links_point_into_the_copy() {
+        let root = tmp("links");
+        let project = root.join("shop");
+        std::fs::create_dir_all(project.join("storage/app/public")).unwrap();
+        std::fs::create_dir_all(project.join("public")).unwrap();
+        std::fs::write(project.join("storage/app/public/logo.png"), "png").unwrap();
+        // Laravel's `php artisan storage:link`.
+        assert!(make_dir_link(&project.join("storage/app/public"), &project.join("public/storage")));
+
+        let copy = root.join("copy");
+        copy_dir(&project, &copy, &mut |_| {}).unwrap();
+        let link = copy.join("public/storage");
+        assert!(std::fs::symlink_metadata(&link).unwrap().file_type().is_symlink(), "still a link");
+        assert_eq!(real_path(&link), real_path(&copy.join("storage/app/public")), "into the copy");
+        assert!(link.join("logo.png").is_file());
         std::fs::remove_dir_all(root).unwrap();
     }
 

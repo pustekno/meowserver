@@ -7,6 +7,7 @@
 
 mod detect;
 pub mod manage;
+pub mod needs;
 
 use std::path::{Path, PathBuf};
 
@@ -16,6 +17,7 @@ pub use detect::Framework;
 
 use crate::config::Config;
 use crate::layout::Layout;
+use crate::service::Kind;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Site {
@@ -31,6 +33,12 @@ pub struct Site {
     pub php: Option<String>,
     pub proxy: Option<String>,
     pub force_https: bool,
+    /// What the project's own files say it needs (PRD F42).
+    #[serde(default)]
+    pub needs: needs::Needs,
+    /// `php` was chosen from `composer.json`, not set by the user.
+    #[serde(default)]
+    pub php_auto: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -52,7 +60,7 @@ pub struct Discovery {
 /// then `www/`, then parked folders in the order configured.
 pub fn discover(layout: &Layout, config: &Config) -> Discovery {
     let mut out = Discovery::default();
-    let suffix = config.general.suffix.as_str();
+    let php = PhpChoice::new(layout, config);
 
     for (name, settings) in &config.sites {
         let Some(slug) = slugify(name) else {
@@ -61,7 +69,7 @@ pub fn discover(layout: &Layout, config: &Config) -> Discovery {
         };
         if let Some(proxy) = &settings.proxy {
             out.sites.push(Site {
-                host: format!("{slug}.{suffix}"),
+                host: format!("{slug}.{}", settings.suffix.unwrap_or(config.general.suffix).as_str()),
                 name: slug,
                 source: Source::Added,
                 path: settings.path.clone().unwrap_or_default(),
@@ -70,27 +78,57 @@ pub fn discover(layout: &Layout, config: &Config) -> Discovery {
                 php: None,
                 proxy: Some(proxy.clone()),
                 force_https: settings.force_https,
+                needs: needs::Needs::default(),
+                php_auto: false,
             });
         } else if let Some(path) = &settings.path {
             if !path.is_dir() {
                 out.warnings.push(format!("{name}: folder {} does not exist", path.display()));
                 continue;
             }
-            push_folder(&mut out, config, &slug, path, Source::Added);
+            push_folder(&mut out, config, &php, &slug, path, Source::Added);
         }
     }
 
     let www = layout.resolve(&config.general.www);
-    scan(&mut out, config, &www, Source::Www);
+    scan(&mut out, config, &php, &www, Source::Www);
     for parked in &config.general.parked {
-        scan(&mut out, config, parked, Source::Parked(parked.clone()));
+        scan(&mut out, config, &php, parked, Source::Parked(parked.clone()));
     }
 
     out.sites.sort_by(|a, b| a.name.cmp(&b.name));
     out
 }
 
-fn scan(out: &mut Discovery, config: &Config, dir: &Path, source: Source) {
+/// The PHP lines a site can be given automatically.
+struct PhpChoice {
+    default: Option<String>,
+    /// Installed lines, newest first.
+    installed: Vec<String>,
+}
+
+impl PhpChoice {
+    fn new(layout: &Layout, config: &Config) -> Self {
+        let mut installed: Vec<String> =
+            crate::service::installed(layout, Kind::Php).iter().map(|i| i.version.line()).collect();
+        installed.sort_by_key(|l| std::cmp::Reverse(l.parse::<crate::version::Version>().ok()));
+        installed.dedup();
+        let default = crate::service::select(layout, Kind::Php, config.version_selector("php"))
+            .map(|i| i.version.line());
+        Self { default, installed }
+    }
+
+    /// For a site without its own setting: the newest installed line the
+    /// project allows when the default does not fit it.
+    fn pick(&self, needs: &needs::Needs) -> Option<String> {
+        if needs.php.is_empty() || self.default.as_ref().is_some_and(|d| needs.php.contains(d)) {
+            return None;
+        }
+        self.installed.iter().find(|l| needs.php.contains(l)).cloned()
+    }
+}
+
+fn scan(out: &mut Discovery, config: &Config, php: &PhpChoice, dir: &Path, source: Source) {
     let Ok(entries) = std::fs::read_dir(dir) else {
         if source != Source::Www {
             out.warnings.push(format!("cannot read folder {}", dir.display()));
@@ -116,11 +154,18 @@ fn scan(out: &mut Discovery, config: &Config, dir: &Path, source: Source) {
     for folder in folders {
         let raw = folder.file_name().unwrap().to_string_lossy().into_owned();
         let Some(slug) = slugify(&raw) else { continue };
-        push_folder(out, config, &slug, &folder, source.clone());
+        push_folder(out, config, php, &slug, &folder, source.clone());
     }
 }
 
-fn push_folder(out: &mut Discovery, config: &Config, slug: &str, path: &Path, source: Source) {
+fn push_folder(
+    out: &mut Discovery,
+    config: &Config,
+    php: &PhpChoice,
+    slug: &str,
+    path: &Path,
+    source: Source,
+) {
     if let Some(existing) = out.sites.iter().find(|s| s.name == slug) {
         out.warnings.push(format!(
             "{} and {} both map to {slug}; using the first",
@@ -135,16 +180,20 @@ fn push_folder(out: &mut Discovery, config: &Config, slug: &str, path: &Path, so
         Some(root) => path.join(root),
         None => detected_root,
     };
+    let needs = needs::read(path);
+    let auto = if settings.php.is_none() { php.pick(&needs) } else { None };
     out.sites.push(Site {
         name: slug.to_owned(),
-        host: format!("{slug}.{}", config.general.suffix.as_str()),
+        host: format!("{slug}.{}", settings.suffix.unwrap_or(config.general.suffix).as_str()),
         source,
         path: path.to_path_buf(),
         docroot,
         framework,
-        php: settings.php,
+        php_auto: auto.is_some(),
+        php: settings.php.or(auto),
         proxy: None,
         force_https: settings.force_https,
+        needs,
     });
 }
 

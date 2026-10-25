@@ -203,7 +203,10 @@ required.
 
 #### Name resolution and HTTPS
 
-**F15 — Site suffix.** `.localhost` by default; `.test` as an option.
+**F15 — Site suffix.** `.localhost` by default; `.test` as an option, for
+all sites (Settings) or per site (Sites page, `meow site <name> --domain
+test`). One site has one name. Projects imported from Laragon keep `.test`,
+the name their settings and database already use.
 `.local` is not offered (it conflicts with mDNS on macOS).
 *Done when:* changing the suffix updates every site, the index page, and the
 hosts entries in one step.
@@ -265,7 +268,11 @@ authentication (PostgreSQL), bound to loopback only (F19).
 
 **F24 — Data directory per version.** Data lives in `data/<service>-<major>`.
 MeowServer refuses to start a server on a data directory created by a
-different service or major version, and explains why.
+different service or major version, and explains why. Other installed
+MySQL and MariaDB versions can run next to the default one, each on its own
+port and data (`[services.mysql.extra] "5.7" = 3307`; Databases page "Run
+too", `meow db enable mysql 5.7`), because projects may need different
+versions; a project picks one through the port in its settings.
 *Done when:* pointing MariaDB at a MySQL 8.4 data directory shows a clear
 error instead of starting.
 
@@ -288,12 +295,20 @@ data:
 
 | Tool | Projects | Data |
 |---|---|---|
-| Laragon | `DocumentRootList` in `usr/laragon.ini` (default `www/`), parked (F9) | `data/mysql-*`, `data/mariadb-*` |
+| Laragon | each entry of `DocumentRootList` in `usr/laragon.ini` (default `www/`), kept as `.test` | `data/mysql-*`, `data/mariadb-*` |
 | XAMPP | each folder in `htdocs/` except XAMPP's own, added (F8) | `mysql/data` (MariaDB) |
 | WampServer | each folder in `www/` except Wamp's own, added | `bin/mysql/*/data`, `bin/mariadb/*/data` |
 | FlyEnv | sites in `server/host.json`, with their PHP version | `server/mysql/data-*`, `server/mariadb/data-*` |
 
-Project folders are served where they are; nothing is moved. Data is copied
+Projects stored inside the tool's folder are copied into MeowServer's `www`
+(removing the tool would delete them); links in the tool's `www` (how
+Laragon users bring in projects from another drive) are followed and served
+where they point, and broken links are listed. Links inside a copied
+project, such as Laravel's `public/storage`, are made again pointing into
+the copy. The PHP line the tool served sites with (Laragon: the build its
+Apache loads) and its database versions are installed if missing and made
+the defaults, so the projects' settings keep working unchanged and the tool
+can be removed afterwards. Data is copied
 by default (the other tool keeps working) or used in place. The plan is shown
 and confirmed before anything is copied, and copying is refused while that
 tool's database server is running. Closing Laragon leaves its MySQL running,
@@ -401,8 +416,25 @@ admin port (19999 -> 19990-) and the PHP pools (base 19000 -> 20000, 21000,
 ...). A process counts as MeowServer's own only when it runs from inside
 this folder, compared by whole folder names (`C:\MeowServer-0.1.0` is not
 inside `C:\MeowServer`).
+When the usual port is free again, the service goes back to it
+(`moved_from` in meow.toml), so projects set up for Laragon's 3306 work
+again once Laragon's MySQL is stopped.
 *Done when:* MeowServer starts next to a running Laragon without the user
 editing anything.
+
+**F42 — What a project needs.** MeowServer reads each project's own files:
+the PHP versions `composer.json` allows (`config.platform.php`, else
+`require.php`, with Composer's constraint syntax) and the database its
+settings name (Laravel `DB_CONNECTION`/`DB_PORT`, CodeIgniter 4
+`database.default.*`, `DATABASE_URL`, WordPress `wp-config.php`). A site
+without its own PHP setting runs on the newest installed PHP the project
+allows when the default does not fit. What is missing (no fitting PHP, a
+database server not installed, no server of MeowServer's on the project's
+port) shows on the Sites page with an Install button where one fits, in
+Doctor, and in `meow doctor`. Project files are only read.
+*Done when:* a project requiring PHP 7.4 on a computer with only PHP 8.4
+shows "Install PHP 7.4", and runs on 7.4 once it is installed without the
+user choosing it.
 
 ### 5.3 Out of scope
 
@@ -1211,6 +1243,7 @@ directly:
 | 2026-10-25 | Owner request after slow Laragon sites on interns' laptops: performance rules in §8.7, Defender exclusions (F39), dev-server ports (F40). Evidence in ADR 0007. |
 | 2026-10-25 | Owner request: import is not Laragon-only. F27 now detects XAMPP, WampServer, and FlyEnv too, and shows the plan before copying. |
 | 2026-10-25 | Owner request: MySQL clashed with Laragon. Services now move to a free port and save it (F41). The `meow` command name may be taken by another program; Doctor reports which `meow` a terminal runs. |
+| 2026-10-25 | Owner request: domain per project (default `.localhost`, `.test` where wanted; F15), several MySQL/MariaDB versions at once (F24), import copies projects stored inside the old tool and follows its links so the tool can be removed (F27), ports return once free (F41), and project needs read from composer.json and settings (F42). Found while testing: Inno Setup 6.7 enforces Windows' RedirectionGuard on Setup, and programs Setup starts inherit it and refuse junctions made without admin rights; Setup now starts MeowServer through Explorer, the window restarts itself through Explorer when it finds the guard, and Doctor reports it. |
 | 2026-10-25 | Owner request: a Windows installer for first install and updates that never deletes data. Inno Setup 6 (free for open source; the only build tool that is not Rust), per user without administrator rights, default `C:\MeowServer` because data lives next to the program; Program Files is refused. Updates replace only the program files; uninstall keeps `www`, `data`, `bin`, and settings. |
 
 No open questions remain for v1.0 scope. New questions are added here as they

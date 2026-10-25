@@ -329,3 +329,18 @@ msgstr "Menutup jendela ini membuat situs tetap jalan di tray. Keluar menghentik
 
 msgid "Stop its database"
 msgstr "Hentikan database-nya"
+
+msgid "Other installed versions can run at the same time, each on its own port:"
+msgstr "Versi lain yang terpasang bisa jalan bersamaan, masing-masing di port sendiri:"
+
+msgid "port {}"
+msgstr "port {}"
+
+msgid "Stop running"
+msgstr "Hentikan"
+
+msgid "Run too"
+msgstr "Jalankan juga"
+
+msgid "Domain ending for {}"
+msgstr "Akhiran domain untuk {}"

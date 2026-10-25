@@ -242,6 +242,34 @@ pub fn process_path(pid: u32) -> Option<String> {
     (ok != 0).then(|| String::from_utf16_lossy(&buf[..len as usize]))
 }
 
+/// Whether Windows' RedirectionGuard is enforced on `pid`. Such a process
+/// refuses to follow junctions and links made without administrator rights,
+/// which is how Laragon users put projects into www. Setup programs (Inno
+/// Setup 6.7 and later) enforce it on themselves, and what they start
+/// inherits it.
+pub fn redirection_guarded(pid: u32) -> bool {
+    use windows_sys::Win32::System::Threading::{
+        GetProcessMitigationPolicy, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
+    };
+    const PROCESS_REDIRECTION_TRUST_POLICY: i32 = 16;
+    let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
+    if handle.is_null() {
+        return false;
+    }
+    let handle = Handle(handle);
+    let mut flags: u32 = 0;
+    let ok = unsafe {
+        GetProcessMitigationPolicy(
+            handle.0,
+            PROCESS_REDIRECTION_TRUST_POLICY,
+            (&mut flags as *mut u32).cast(),
+            size_of::<u32>(),
+        )
+    };
+    // Bit 0: EnforceRedirectionTrust (bit 1 only audits).
+    ok != 0 && flags & 1 != 0
+}
+
 /// Ends a process at once. For programs that keep no unsaved state.
 pub fn terminate(pid: u32) {
     use windows_sys::Win32::System::Threading::{OpenProcess, PROCESS_TERMINATE, TerminateProcess};

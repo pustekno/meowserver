@@ -44,6 +44,42 @@ fn port(config: &Config, kind: Kind) -> u16 {
     }
 }
 
+/// Runs an installed MySQL or MariaDB line next to the default one, on
+/// `port` or the next free port after the default's (PRD F24). Takes
+/// effect on the next start. Returns the port.
+pub fn enable_version(layout: &Layout, kind: Kind, line: &str, port: Option<u16>) -> Result<u16> {
+    if !matches!(kind, Kind::Mysql | Kind::Mariadb) {
+        bail!("only MySQL and MariaDB can run several versions at once");
+    }
+    let mut config = Config::load(layout)?;
+    let default = active(layout, &config, kind)?;
+    let installed = service::select(layout, kind, Some(line)).with_context(|| {
+        format!("{} {line} is not installed: meow install {} {line}", kind.id(), kind.id())
+    })?;
+    let line = datadir::line(kind, &installed.version);
+    if line == datadir::line(kind, &default.version) {
+        bail!("{} {line} is already the default version", kind.id());
+    }
+    let port = match port {
+        Some(p) => p,
+        None => crate::engine::free_port(&config, config.port(kind.id(), mysql::DEFAULT_PORT) + 1)
+            .context("no free port found")?,
+    };
+    config.services.entry(kind.id().into()).or_default().extra.insert(line, port);
+    config.save(layout)?;
+    Ok(port)
+}
+
+/// Stops running `line` next to the default version. Its data stays.
+pub fn disable_version(layout: &Layout, kind: Kind, line: &str) -> Result<()> {
+    let mut config = Config::load(layout)?;
+    let removed = config.services.get_mut(kind.id()).and_then(|s| s.extra.remove(line));
+    if removed.is_none() {
+        bail!("{} {line} is not set to run next to the default version", kind.id());
+    }
+    config.save(layout)
+}
+
 /// Dumps one database, or all of them, into `backups/` as gzip-compressed
 /// SQL. The server must be running. Returns the file written.
 pub fn backup(layout: &Layout, kind: Kind, database: Option<&str>) -> Result<PathBuf> {

@@ -101,7 +101,10 @@ Name: "{autoprograms}\MeowServer"; Filename: "{app}\meowserver.exe"; IconFilenam
 Name: "{autodesktop}\MeowServer"; Filename: "{app}\meowserver.exe"; IconFilename: "{app}\meowserver.ico"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\meowserver.exe"; Description: "{cm:LaunchProgram,MeowServer}"; Flags: nowait postinstall skipifsilent
+; Through Explorer, not as Setup's child: Setup enforces Windows' RedirectionGuard
+; on itself, and a child would inherit it and refuse the folder links (junctions)
+; Laragon users keep their projects behind.
+Filename: "{win}\explorer.exe"; Parameters: """{app}\meowserver.exe"""; Description: "{cm:LaunchProgram,MeowServer}"; Flags: nowait postinstall skipifsilent
 
 [UninstallRun]
 Filename: "{app}\meow.exe"; Parameters: "quit"; Flags: runhidden waituntilterminated; RunOnceId: "quit"

@@ -11,6 +11,7 @@ use std::time::Duration;
 use anyhow::{Context, Result, bail};
 use clap::Subcommand;
 use meow_core::config::Config;
+use meow_core::ipc::Request;
 use meow_core::layout::Layout;
 use meow_core::{defender, doctor, hosts, import, logs, platform, report, system, tls};
 
@@ -36,6 +37,17 @@ pub enum DbAction {
     Upgrade { service: String, version: String },
     /// Open a database GUI (HeidiSQL, or general.db_tool).
     Open { service: String },
+    /// Run another installed version next to the default one, on its own
+    /// port and data (e.g. `meow db enable mysql 5.7`).
+    Enable {
+        service: String,
+        version: String,
+        /// Port to use; by default the next free one after the default's.
+        #[arg(long)]
+        port: Option<u16>,
+    },
+    /// Stop running a version next to the default one. Its data is kept.
+    Disable { service: String, version: String },
 }
 
 #[derive(Subcommand)]
@@ -252,6 +264,21 @@ pub fn db(layout: &Layout, action: DbAction) -> Result<()> {
             println!("{} {version} is now active. Start it with `meow start {}`.", k.id(), k.id());
         }
         DbAction::Open { service } => database::open_tool(layout, kind(&service)?)?,
+        DbAction::Enable { service, version, port } => {
+            let k = kind(&service)?;
+            let port = database::enable_version(layout, k, &version, port)?;
+            println!("{} {version} will run on port {port}, next to the default version.", k.id());
+            // Starting the unit again starts what is new and leaves the rest.
+            if daemon::call(layout, Request::Start { unit: k.id().into() }).is_err() {
+                println!("It starts with `meow start {}`.", k.id());
+            }
+        }
+        DbAction::Disable { service, version } => {
+            let k = kind(&service)?;
+            database::disable_version(layout, k, &version)?;
+            println!("{} {version} no longer runs. Its data is kept.", k.id());
+            let _ = daemon::call(layout, Request::Restart { unit: k.id().into() });
+        }
     }
     Ok(())
 }

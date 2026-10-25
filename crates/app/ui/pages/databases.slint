@@ -72,6 +72,28 @@ export component DatabasesPage inherits VerticalLayout {
                     color: Theme.muted;
                     overflow: elide;
                 }
+                if db.extras.length > 0: Text {
+                    text: @tr("Other installed versions can run at the same time, each on its own port:");
+                }
+                for extra in db.extras: HorizontalLayout {
+                    spacing: 10px;
+                    Dot {
+                        on: extra.running;
+                        y: (parent.height - self.height) / 2;
+                    }
+                    Text {
+                        text: extra.enabled ? (db.name + " " + extra.line + " · " + @tr("port {}", extra.port)) : (db.name + " " + extra.line);
+                        vertical-alignment: center;
+                        horizontal-stretch: 1;
+                    }
+                    Button {
+                        text: extra.enabled ? @tr("Stop running") : @tr("Run too");
+                        enabled: !Backend.busy;
+                        clicked => {
+                            Backend.db-version(db.unit, extra.line, !extra.enabled);
+                        }
+                    }
+                }
             }
             if Backend.missing-databases.length > 0: Card {
                 Text {

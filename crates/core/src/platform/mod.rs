@@ -110,6 +110,12 @@ pub fn terminate(pid: u32) {
     imp::terminate(pid);
 }
 
+/// Whether `pid` refuses to follow links made without administrator rights
+/// (Windows' RedirectionGuard, inherited from setup programs).
+pub fn redirection_guarded(pid: u32) -> bool {
+    imp::redirection_guarded(pid)
+}
+
 pub fn is_alive(pid: u32) -> bool {
     imp::process_names().iter().any(|(p, _)| *p == pid)
 }

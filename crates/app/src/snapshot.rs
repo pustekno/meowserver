@@ -24,6 +24,48 @@ pub struct ServiceInfo {
     pub failed: bool,
 }
 
+/// A site's missing need in the window's language: (text, what
+/// `install-service` installs, button label).
+pub fn need(problem: &site::needs::Problem) -> (String, String, String) {
+    use site::needs::Problem;
+    let fill =
+        |template: &str, values: &[&str]| values.iter().fold(t(template), |s, v| s.replacen("{}", v, 1));
+    match problem {
+        Problem::Php { constraint, running, suggest } => (
+            if running == "none" {
+                fill("Needs PHP {}; no PHP is installed.", &[constraint])
+            } else {
+                fill("Needs PHP {}, but would run on PHP {}.", &[constraint, running])
+            },
+            format!("php {suggest}"),
+            fill("Install PHP {}", &[suggest]),
+        ),
+        Problem::DatabaseMissing { family } => (
+            fill("Uses {}, which is not installed.", &[family.name()]),
+            family.kinds()[0].id().to_owned(),
+            fill("Install {}", &[family.name()]),
+        ),
+        Problem::DatabasePort { family, port, served } => {
+            let served: Vec<String> = served.iter().map(u16::to_string).collect();
+            (
+                fill(
+                    "Connects to {} on port {}, but MeowServer's runs on {}. Change the port in the project's settings, or run a version on {} (Databases page).",
+                    &[family.name(), &port.to_string(), &served.join(", "), &port.to_string()],
+                ),
+                String::new(),
+                String::new(),
+            )
+        }
+    }
+}
+
+pub struct DbExtraInfo {
+    pub line: String,
+    pub enabled: bool,
+    pub running: bool,
+    pub port: Option<u16>,
+}
+
 pub struct DbInfo {
     pub unit: Unit,
     pub name: &'static str,
@@ -32,6 +74,7 @@ pub struct DbInfo {
     pub running: bool,
     pub data_dir: String,
     pub user: &'static str,
+    pub extras: Vec<DbExtraInfo>,
 }
 
 pub struct Snapshot {
@@ -127,6 +170,26 @@ pub fn take(layout: &Layout) -> Snapshot {
         let Some(installed) = service::select(layout, kind, config.version_selector(kind.id())) else {
             continue;
         };
+        // Other installed lines of MySQL and MariaDB, which can run too.
+        let mut extras = Vec::new();
+        if unit != Unit::Postgres {
+            let enabled = config.services.get(kind.id()).map(|s| s.extra.clone()).unwrap_or_default();
+            let default_line = datadir::line(kind, &installed.version);
+            let mut lines: Vec<String> =
+                service::installed(layout, kind).iter().map(|i| datadir::line(kind, &i.version)).collect();
+            lines.dedup();
+            for line in lines.into_iter().filter(|l| *l != default_line) {
+                let id = format!("{}-{line}", kind.id());
+                let running =
+                    status.processes.iter().any(|p| p.id == id && matches!(p.state, State::Running { .. }));
+                extras.push(DbExtraInfo {
+                    port: enabled.get(&line).copied(),
+                    enabled: enabled.contains_key(&line),
+                    running,
+                    line,
+                });
+            }
+        }
         databases.push(DbInfo {
             unit,
             name,
@@ -135,6 +198,7 @@ pub fn take(layout: &Layout) -> Snapshot {
             running: status.units.contains(&unit),
             data_dir: datadir::path(layout, &config, kind, &installed.version).display().to_string(),
             user,
+            extras,
         });
     }
 

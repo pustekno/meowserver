@@ -110,14 +110,36 @@ pub fn import_plan(layout: &Layout, source: &import::Source) -> String {
     let fill = |template: &str, values: &[&str]| {
         values.iter().fold(t(template), |text, v| text.replacen("{}", v, 1))
     };
-    let suffix = Config::load(layout).unwrap_or_default().general.suffix.as_str().to_owned();
+    let config = Config::load(layout).unwrap_or_default();
+    let www = layout.resolve(&config.general.www);
     let mut lines =
         vec![fill("Import from {} ({}):", &[source.tool.name(), &source.root.display().to_string()])];
     for dir in &source.parked {
         lines.push(format!("• {}", fill("serve every folder in {}", &[&dir.display().to_string()])));
     }
     for p in &source.projects {
-        lines.push(format!("• {} → {}.{suffix}", p.path.display(), p.name));
+        let slug = meow_core::site::slugify(&p.name).unwrap_or_default();
+        let host = format!("{slug}.{}", p.suffix.unwrap_or(config.general.suffix).as_str());
+        let line = if p.copy {
+            fill(
+                "copy {} ({}) to {}, as {}",
+                &[
+                    &p.path.display().to_string(),
+                    &import::human(p.bytes),
+                    &www.join(&p.name).display().to_string(),
+                    &host,
+                ],
+            )
+        } else {
+            fill("serve {} where it is, as {}", &[&p.path.display().to_string(), &host])
+        };
+        lines.push(format!("• {line}"));
+    }
+    if let Some(php) = &source.php {
+        let installed = meow_core::service::select(layout, Kind::Php, Some(php)).is_some();
+        let template =
+            if installed { "make PHP {} the default" } else { "install PHP {} and make it the default" };
+        lines.push(format!("• {}", fill(template, &[php])));
     }
     for db in &source.databases {
         let version = db.version.clone().unwrap_or_default();
@@ -135,8 +157,14 @@ pub fn import_plan(layout: &Layout, source: &import::Source) -> String {
         };
         lines.push(format!("• {line}"));
     }
+    for link in &source.broken {
+        lines.push(format!("• {}", fill("skip {}: the link's target does not exist", &[link])));
+    }
     lines.push(String::new());
-    lines.push(fill("Project folders stay where they are. Nothing in {} is changed.", &[source.tool.name()]));
+    lines.push(fill(
+        "Projects stored in {} are copied, linked ones are served where they are, and nothing in {} is changed, so it can be removed afterwards.",
+        &[source.tool.name(), source.tool.name()],
+    ));
     if import::in_use(source) {
         lines.push(fill(RUNNING, &[source.tool.name(), source.tool.name()]));
     }
@@ -149,11 +177,25 @@ pub fn import_from(layout: &Layout, ui: &Ui, tool: import::Tool, root: &Path) ->
     if import::in_use(&source) {
         bail!("{}", t(RUNNING).replace("{}", tool.name()));
     }
+    // What the tool ran, so projects find the same versions: its PHP line
+    // and its database lines.
+    let mut wanted: Vec<(Kind, String)> = source.php.iter().map(|l| (Kind::Php, l.clone())).collect();
+    for db in &source.databases {
+        if let Some(line) = db.version.as_deref().and_then(|v| v.parse::<meow_core::version::Version>().ok())
+        {
+            wanted.push((db.kind, line.line()));
+        }
+    }
+    for (kind, line) in wanted {
+        if service::select(layout, kind, Some(&line)).is_none() {
+            install(layout, ui, kind, Some(&line))?;
+        }
+    }
     let mut config = Config::load(layout)?;
     let notes = import::apply(layout, &mut config, &source, import::Mode::Copy, &mut |done, total| {
         ui.progress(format!(
             "{}: {} {} {}",
-            t("Copying databases"),
+            t("Copying projects and databases"),
             import::human(done),
             t("of"),
             import::human(total)
@@ -163,6 +205,27 @@ pub fn import_from(layout: &Layout, ui: &Ui, tool: import::Tool, root: &Path) ->
     reload(layout);
     ui.progress(String::new());
     Ok(format!("{}\n{}", t("Imported."), notes.join("\n")))
+}
+
+/// Runs another installed version of a database next to the default one,
+/// or stops doing so (PRD F24).
+pub fn db_version(layout: &Layout, unit: &str, line: &str, enable: bool) -> Result<String> {
+    use meow_core::database;
+    let kind = Kind::from_id(unit).context("unknown database")?;
+    let name = crate::snapshot::title(kind);
+    if enable {
+        let port = database::enable_version(layout, kind, line, None)?;
+        call(layout, Request::Start { unit: unit.into() })?;
+        Ok(t("{} {} runs on port {}.").replacen("{}", name, 1).replacen("{}", line, 1).replacen(
+            "{}",
+            &port.to_string(),
+            1,
+        ))
+    } else {
+        database::disable_version(layout, kind, line)?;
+        call(layout, Request::Restart { unit: unit.into() })?;
+        Ok(t("{} {} stopped. Its data is kept.").replacen("{}", name, 1).replacen("{}", line, 1))
+    }
 }
 
 /// Tells a running `meowd` to apply `meow.toml` again; quietly does

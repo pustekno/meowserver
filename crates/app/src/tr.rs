@@ -66,6 +66,25 @@ pub fn t(text: &str) -> String {
         }
         "Stopping {}'s database…" => "Menghentikan database {}…",
         "Imported." => "Selesai diimpor.",
+        "copy {} ({}) to {}, as {}" => "salin {} ({}) ke {}, sebagai {}",
+        "serve {} where it is, as {}" => "layani {} di tempatnya, sebagai {}",
+        "make PHP {} the default" => "jadikan PHP {} sebagai default",
+        "install PHP {} and make it the default" => "pasang PHP {} dan jadikan default",
+        "skip {}: the link's target does not exist" => "lewati {}: tujuan link-nya tidak ada",
+        "Projects stored in {} are copied, linked ones are served where they are, and nothing in {} is changed, so it can be removed afterwards." => {
+            "Proyek yang tersimpan di {} disalin, proyek berupa link dilayani di tempatnya, dan tidak ada yang diubah di {}, jadi setelah ini aplikasi itu boleh dihapus."
+        }
+        "Copying projects and databases" => "Menyalin proyek dan database",
+        "Needs PHP {}, but would run on PHP {}." => "Butuh PHP {}, tapi akan jalan di PHP {}.",
+        "Install PHP {}" => "Pasang PHP {}",
+        "Needs PHP {}; no PHP is installed." => "Butuh PHP {}; belum ada PHP yang terpasang.",
+        "Uses {}, which is not installed." => "Memakai {}, yang belum terpasang.",
+        "Install {}" => "Pasang {}",
+        "Connects to {} on port {}, but MeowServer's runs on {}. Change the port in the project's settings, or run a version on {} (Databases page)." => {
+            "Terhubung ke {} di port {}, tapi milik MeowServer jalan di {}. Ubah port di pengaturan proyek, atau jalankan satu versi di {} (halaman Database)."
+        }
+        "{} {} runs on port {}." => "{} {} berjalan di port {}.",
+        "{} {} stopped. Its data is kept." => "{} {} dihentikan. Datanya tetap disimpan.",
         "Trusted. Restart the browser if it was open." => {
             "Dipercaya. Mulai ulang browser jika sedang terbuka."
         }

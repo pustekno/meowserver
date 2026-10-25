@@ -82,8 +82,14 @@ pub fn run(layout: &Layout) -> Vec<Check> {
     for unit in &units {
         match unit {
             Unit::Web => ports.push(("web".into(), config.port("web", 80))),
-            Unit::Mysql => ports.push(("mysql".into(), config.port("mysql", mysql::DEFAULT_PORT))),
-            Unit::Mariadb => ports.push(("mariadb".into(), config.port("mariadb", mysql::DEFAULT_PORT))),
+            Unit::Mysql | Unit::Mariadb => {
+                let name = unit.id();
+                ports.push((name.into(), config.port(name, mysql::DEFAULT_PORT)));
+                // Versions running next to the default one.
+                for (line, port) in config.services.get(name).map(|s| s.extra.clone()).unwrap_or_default() {
+                    ports.push((format!("{name} {line}"), port));
+                }
+            }
             Unit::Postgres => {
                 ports.push(("postgres".into(), config.port("postgres", postgres::DEFAULT_PORT)))
             }
@@ -182,11 +188,22 @@ pub fn run(layout: &Layout) -> Vec<Check> {
     // Sites and hosts entries.
     let discovery = site::discover(layout, &config);
     for warning in discovery.warnings {
-        checks.push(Check::problem(
-            "sites",
-            warning,
-            "Rename one of the folders or set a name in meow.toml.",
-        ));
+        let fix = if warning.contains(" links to ") {
+            "Point the link at the project's folder again, or delete the link."
+        } else {
+            "Rename one of the folders or set a name in meow.toml."
+        };
+        checks.push(Check::problem("sites", warning, fix));
+    }
+    // What projects need, from their own composer.json and settings.
+    for s in &discovery.sites {
+        for problem in site::needs::problems(layout, &config, s) {
+            let fix = match problem.install() {
+                Some((service, version)) => format!("meow install {service} {version}").trim_end().to_owned(),
+                None => "Change the port in the project's settings, or: meow db enable".into(),
+            };
+            checks.push(Check::problem(format!("site {}", s.name), problem.describe(&s.name), fix));
+        }
     }
     if config.general.manage_hosts && !discovery.sites.is_empty() {
         if hosts::is_current(layout, &config) {
@@ -225,6 +242,20 @@ pub fn run(layout: &Layout) -> Vec<Check> {
                  for projects is another option.",
             ));
         }
+    }
+
+    // Started from a setup program, MeowServer inherits RedirectionGuard and
+    // silently loses every project linked into www without admin rights.
+    let guarded = platform::processes_in(layout.root(), &["meowd"])
+        .into_iter()
+        .any(|(pid, _)| platform::redirection_guarded(pid));
+    if guarded {
+        checks.push(Check::problem(
+            "Folder links",
+            "MeowServer was started by a setup program and cannot follow folder links (junctions) \
+             made without administrator rights, so linked projects are missing",
+            "Quit MeowServer and start it again from the Start menu.",
+        ));
     }
 
     // `meow` is a short name another program may also use; a terminal runs

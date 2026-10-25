@@ -139,10 +139,34 @@ thread_local! {
     static LOCAL: RefCell<Local> = RefCell::default();
 }
 
+/// Started by a setup program, this process inherited Windows'
+/// RedirectionGuard: it, `meowd`, and every service would refuse folder
+/// links made without admin rights (most of a Laragon user's www). Starts
+/// a fresh copy through Explorer instead and returns true. A stamp file
+/// keeps this from looping should Explorer itself be guarded.
+fn relaunch_unguarded(layout: &Layout) -> bool {
+    if !platform::redirection_guarded(std::process::id()) {
+        return false;
+    }
+    let stamp = layout.tmp().join("relaunched");
+    let recent = std::fs::metadata(&stamp)
+        .and_then(|m| m.modified())
+        .is_ok_and(|t| t.elapsed().is_ok_and(|age| age < Duration::from_secs(30)));
+    if recent {
+        return false;
+    }
+    let Ok(exe) = std::env::current_exe() else { return false };
+    let _ = std::fs::write(&stamp, b"");
+    std::process::Command::new("explorer.exe").arg(exe).spawn().is_ok()
+}
+
 fn main() -> Result<()> {
     let layout = Layout::discover()?;
     layout.ensure()?;
     meow_core::report::install_panic_hook(&layout);
+    if relaunch_unguarded(&layout) {
+        return Ok(());
+    }
     // The window is a client; make sure the tray and services are up.
     let daemon_error = meow_core::ipc::ensure_running(&layout, false).err();
 
@@ -327,6 +351,13 @@ fn wire(window: &AppWindow, ui: &Ui) {
             })
         }
     });
+    b.on_db_version({
+        let ui = ui.clone();
+        move |unit, line, enable| {
+            let (unit, line) = (unit.to_string(), line.to_string());
+            ui.run(move |layout, _| actions::db_version(layout, &unit, &line, enable))
+        }
+    });
     b.on_confirm_import({
         let ui = ui.clone();
         let weak = window.as_weak();
@@ -431,6 +462,23 @@ fn wire(window: &AppWindow, ui: &Ui) {
             let (name, version) = (name.to_string(), version.to_string());
             let result = edit_config(&ui.layout, |c| {
                 manage::settings(c, &name).php = (version != "default").then(|| version.clone());
+                Ok(())
+            });
+            match result {
+                Ok(()) => reload_in_background(&ui),
+                Err(e) => ui.message(format!("{e:#}"), true),
+            }
+        }
+    });
+
+    b.on_set_site_domain({
+        let ui = ui.clone();
+        move |name, index| {
+            let name = name.to_string();
+            let suffix = if index == 1 { Suffix::Test } else { Suffix::Localhost };
+            let result = edit_config(&ui.layout, |c| {
+                // The default ending needs no setting of its own.
+                manage::settings(c, &name).suffix = (suffix != c.general.suffix).then_some(suffix);
                 Ok(())
             });
             match result {
@@ -791,11 +839,16 @@ fn wire(window: &AppWindow, ui: &Ui) {
     b.on_install_service({
         let ui = ui.clone();
         move |id| {
+            // `postgres`, or with a version: `php 7.4` (from a site's needs).
+            let (id, selector) = match id.split_once(' ') {
+                Some((id, version)) => (id.to_owned(), Some(version.to_owned())),
+                None => (id.to_string(), None),
+            };
             let Some(kind) = Kind::from_id(&id) else { return };
             // MySQL: the LTS line, which is what Laragon users have.
-            let selector = (kind == Kind::Mysql).then_some("8.4");
+            let selector = selector.or_else(|| (kind == Kind::Mysql).then(|| "8.4".to_owned()));
             ui.run(move |l, ui| {
-                let version = actions::install(l, ui, kind, selector)?;
+                let version = actions::install(l, ui, kind, selector.as_deref())?;
                 Ok(format!("{} {version} {}", snapshot::title(kind), t("installed.")))
             });
         }
@@ -927,6 +980,17 @@ fn apply(w: &AppWindow, snap: &snapshot::Snapshot, local: &mut Local) {
                 running: d.running,
                 data_dir: d.data_dir.clone().into(),
                 user: d.user.into(),
+                extras: model(
+                    d.extras
+                        .iter()
+                        .map(|e| DbExtra {
+                            line: e.line.clone().into(),
+                            enabled: e.enabled,
+                            running: e.running,
+                            port: e.port.map(|p| p.to_string()).unwrap_or_default().into(),
+                        })
+                        .collect(),
+                ),
             })
             .collect(),
     ));
@@ -949,7 +1013,8 @@ fn show_sites(w: &AppWindow, local: &Local) {
     let b = w.global::<Backend>();
     let filter = b.get_site_filter().to_lowercase();
     let choices: Vec<String> = b.get_php_choices().iter().map(|s| s.to_string()).collect();
-    let config = Config::load(&w_layout(w)).unwrap_or_default();
+    let layout = w_layout(w);
+    let config = Config::load(&layout).unwrap_or_default();
     let rows: Vec<SiteRow> = local
         .sites
         .iter()
@@ -958,12 +1023,21 @@ fn show_sites(w: &AppWindow, local: &Local) {
                 || s.name.contains(&filter)
                 || s.path.to_string_lossy().to_lowercase().contains(&filter)
         })
-        .map(|s| SiteRow {
+        .map(|s| {
+            let need = site::needs::problems(&layout, &config, s).into_iter().next();
+            let (need, install, label) = need.map(|p| snapshot::need(&p)).unwrap_or_default();
+            (s, need, install, label)
+        })
+        .map(|(s, need, need_install, need_install_label)| SiteRow {
+            need: need.into(),
+            need_install: need_install.into(),
+            need_install_label: need_install_label.into(),
             name: s.name.clone().into(),
             host: s.host.clone().into(),
             url: snapshot::site_url(s, &config).into(),
             folder: s.proxy.clone().unwrap_or_else(|| s.path.display().to_string()).into(),
             php: s.php.clone().unwrap_or_else(|| "default".into()).into(),
+            domain_index: if s.host.ends_with(".test") { 1 } else { 0 },
             php_index: s
                 .php
                 .as_deref()

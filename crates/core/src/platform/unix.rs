@@ -84,6 +84,11 @@ pub fn process_path(pid: u32) -> Option<String> {
     (!name.is_empty()).then_some(name)
 }
 
+/// Windows only.
+pub fn redirection_guarded(_pid: u32) -> bool {
+    false
+}
+
 /// Asks a process to end (`SIGTERM`).
 pub fn terminate(pid: u32) {
     unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) };

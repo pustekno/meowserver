@@ -77,6 +77,7 @@ pub fn configure(
     php: Option<String>,
     proxy: Option<String>,
     root: Option<String>,
+    domain: Option<String>,
 ) -> Result<()> {
     edit(layout, |config| {
         let mut changes = Vec::new();
@@ -99,6 +100,16 @@ pub fn configure(
         if let Some(root) = root {
             settings.root = (root != "auto").then(|| PathBuf::from(&root));
             changes.push(format!("document root: {root}"));
+        }
+        if let Some(domain) = domain {
+            settings.suffix = match domain.as_str() {
+                "default" => None,
+                other => Some(
+                    meow_core::config::Suffix::parse(other)
+                        .ok_or_else(|| anyhow::anyhow!("--domain is localhost, test, or default"))?,
+                ),
+            };
+            changes.push(format!("domain: {domain}"));
         }
         if changes.is_empty() {
             anyhow::bail!("nothing to change; see `meow site --help`");

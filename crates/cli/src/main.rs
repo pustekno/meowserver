@@ -103,6 +103,9 @@ enum Cmd {
         /// Document root relative to the project folder, or `auto`.
         #[arg(long)]
         root: Option<String>,
+        /// Domain ending for this site: `localhost`, `test`, or `default`.
+        #[arg(long)]
+        domain: Option<String>,
     },
 
     /// Open a shell with PATH and php.ini set to the active versions.
@@ -215,7 +218,9 @@ fn run(cli: Cli) -> Result<()> {
         Cmd::New { template, name, package } => {
             sites::new_project(&layout, &template, &name, package.as_deref())
         }
-        Cmd::Site { name, php, proxy, root } => sites::configure(&layout, &name, php, proxy, root),
+        Cmd::Site { name, php, proxy, root, domain } => {
+            sites::configure(&layout, &name, php, proxy, root, domain)
+        }
 
         Cmd::Shell => system::shell(&layout),
         Cmd::Run { command } => system::run_command(&layout, &command),

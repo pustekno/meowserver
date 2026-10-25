@@ -17,7 +17,7 @@ use crate::ipc::{Request, Response};
 use crate::layout::Layout;
 use crate::platform;
 use crate::service::web::Planned;
-use crate::service::{Unit, apache, caddy, mailpit, mysql, nginx, php, postgres, redis};
+use crate::service::{Kind, Unit, apache, caddy, mailpit, mysql, nginx, php, postgres, redis};
 use crate::site::{self, Site};
 use crate::supervisor::{self, Invocation, ProcessSpec, Supervisor};
 
@@ -213,8 +213,19 @@ impl Engine {
         }
         let config = &ctx.config;
         let specs: Vec<ProcessSpec> = match unit {
-            Unit::Mysql => vec![mysql::plan(&self.layout, config, crate::service::Kind::Mysql)?],
-            Unit::Mariadb => vec![mysql::plan(&self.layout, config, crate::service::Kind::Mariadb)?],
+            Unit::Mysql | Unit::Mariadb => {
+                let kind = if unit == Unit::Mysql { Kind::Mysql } else { Kind::Mariadb };
+                let (specs, warnings) = mysql::plan(&self.layout, config, kind)?;
+                state.warnings.extend(warnings);
+                // The default server's port is checked below with the others.
+                for (line, port) in extra_versions(config, kind) {
+                    let id = format!("{}-{line}", kind.id());
+                    if specs.iter().any(|s| s.id == id) && !self.supervisor.is_running(&id) {
+                        self.ensure_port_free(&format!("{} {line}", kind.id()), port)?;
+                    }
+                }
+                specs
+            }
             Unit::Postgres => vec![postgres::plan(&self.layout, config)?],
             Unit::Redis => vec![redis::plan(&self.layout, config)?],
             Unit::Mailpit => vec![mailpit::plan(&self.layout, config)?],
@@ -298,7 +309,7 @@ impl Engine {
         unit: Unit,
     ) -> Result<Option<Config>> {
         let mut moved = config.clone();
-        let mut changes: Vec<(&str, PortField, u16)> = Vec::new();
+        let mut changes: Vec<Change> = Vec::new();
         let mut notes = Vec::new();
         for (service, field, default, first) in listening_ports(unit) {
             if field == PortField::Tls && !config.general.https {
@@ -308,33 +319,62 @@ impl Engine {
                 continue;
             }
             let current = field.get(&moved, service, default);
+            let original = field.moved_from(&moved, service);
+            // Moved earlier because something held the usual port, and it
+            // is free again (Laragon quit): go back, so projects set up for
+            // that port, like Laragon's, work again.
+            if let Some(original) = original
+                && original != current
+                && port_free(original)
+            {
+                change(&mut moved, &mut changes, Change::Port { service, field, port: original, from: None });
+                notes.push(format!(
+                    "{service}: port {original} is free again, so MeowServer's {service} is back on it"
+                ));
+                continue;
+            }
             let owners = self.foreign_owners(current);
             if owners.is_empty() {
                 continue;
             }
-            let taken: BTreeSet<u16> = Unit::ALL
-                .into_iter()
-                .flat_map(listening_ports)
-                .map(|(s, f, d, _)| f.get(&moved, s, d))
-                .collect();
+            let taken = configured_ports(&moved);
             let Some(free) = (first..first.saturating_add(200)).find(|p| !taken.contains(p) && port_free(*p))
             else {
                 continue;
             };
-            field.set(&mut moved, service, free);
-            changes.push((service, field, free));
+            let from = Some(original.unwrap_or(current));
+            change(&mut moved, &mut changes, Change::Port { service, field, port: free, from });
             notes.push(format!(
-                "{service}: port {current} is used by {}, so MeowServer's {service} now uses port {free} \
-                 (saved in meow.toml; set [services.{service}] {} = {current} there to go back)",
+                "{service}: port {current} is used by {}, so MeowServer's {service} uses port {free} for now \
+                 (it goes back to {current} when that port is free)",
                 owners.join(" and "),
-                field.key(),
             ));
+        }
+        if let Some(kind) = database_kind(unit) {
+            for (line, port) in extra_versions(&moved, kind) {
+                let owners = self.foreign_owners(port);
+                if owners.is_empty() {
+                    continue;
+                }
+                let taken = configured_ports(&moved);
+                let Some(free) =
+                    (port + 1..port.saturating_add(200)).find(|p| !taken.contains(p) && port_free(*p))
+                else {
+                    continue;
+                };
+                notes.push(format!(
+                    "{} {line}: port {port} is used by {}, so it now uses port {free} (saved in meow.toml)",
+                    kind.id(),
+                    owners.join(" and ")
+                ));
+                change(&mut moved, &mut changes, Change::Extra { kind, line, port: free });
+            }
         }
         if unit == Unit::Php
             && let Some((base, owners)) = self.free_php_base(&moved, sites)
         {
-            PortField::Port.set(&mut moved, "php", base);
-            changes.push(("php", PortField::Port, base));
+            let port_change = Change::Port { service: "php", field: PortField::Port, port: base, from: None };
+            change(&mut moved, &mut changes, port_change);
             notes.push(format!(
                 "php: its ports are used by {}, so MeowServer's PHP now uses ports from {base} \
                  (saved in meow.toml as [services.php] port)",
@@ -344,10 +384,10 @@ impl Engine {
         if changes.is_empty() {
             return Ok(None);
         }
-        // Write only the moved ports onto meow.toml as it is now.
+        // Write only these changes onto meow.toml as it is now.
         let mut saved = Config::load(&self.layout)?;
-        for (service, field, port) in changes {
-            field.set(&mut saved, service, port);
+        for c in changes {
+            c.apply(&mut saved);
         }
         saved.save(&self.layout)?;
         for note in &notes {
@@ -426,6 +466,75 @@ fn unit_port(config: &Config, unit: Unit) -> Option<(&'static str, u16)> {
     })
 }
 
+/// A port change made while starting, applied to the plan and to meow.toml.
+enum Change {
+    /// `from`: the usual port to return to once free; `None` clears it.
+    Port {
+        service: &'static str,
+        field: PortField,
+        port: u16,
+        from: Option<u16>,
+    },
+    Extra {
+        kind: Kind,
+        line: String,
+        port: u16,
+    },
+}
+
+impl Change {
+    fn apply(&self, config: &mut Config) {
+        match self {
+            Change::Port { service, field, port, from } => {
+                field.set(config, service, *port);
+                let settings = config.services.entry((*service).into()).or_default();
+                match from {
+                    Some(from) => settings.moved_from.insert(field.key().into(), *from),
+                    None => settings.moved_from.remove(field.key()),
+                };
+            }
+            Change::Extra { kind, line, port } => {
+                config.services.entry(kind.id().into()).or_default().extra.insert(line.clone(), *port);
+            }
+        }
+    }
+}
+
+fn change(config: &mut Config, changes: &mut Vec<Change>, c: Change) {
+    c.apply(config);
+    changes.push(c);
+}
+
+/// Every port this configuration listens on that people connect to,
+/// extra database versions included.
+pub fn configured_ports(config: &Config) -> BTreeSet<u16> {
+    let mut ports: BTreeSet<u16> =
+        Unit::ALL.into_iter().flat_map(listening_ports).map(|(s, f, d, _)| f.get(config, s, d)).collect();
+    for kind in [Kind::Mysql, Kind::Mariadb] {
+        ports.extend(extra_versions(config, kind).into_iter().map(|(_, port)| port));
+    }
+    ports
+}
+
+/// The next port from `from` that nothing listens on and this
+/// configuration does not use, for a new extra database version.
+pub fn free_port(config: &Config, from: u16) -> Option<u16> {
+    let taken = configured_ports(config);
+    (from..from.saturating_add(200)).find(|p| !taken.contains(p) && port_free(*p))
+}
+
+fn extra_versions(config: &Config, kind: Kind) -> Vec<(String, u16)> {
+    config.services.get(kind.id()).map(|s| s.extra.clone().into_iter().collect()).unwrap_or_default()
+}
+
+fn database_kind(unit: Unit) -> Option<Kind> {
+    match unit {
+        Unit::Mysql => Some(Kind::Mysql),
+        Unit::Mariadb => Some(Kind::Mariadb),
+        _ => None,
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PortField {
     Port,
@@ -449,6 +558,11 @@ impl PortField {
             PortField::Tls => settings.tls_port = Some(port),
             PortField::Web => settings.web_port = Some(port),
         }
+    }
+
+    /// The usual port this field had before MeowServer moved it.
+    fn moved_from(self, config: &Config, service: &str) -> Option<u16> {
+        config.services.get(service).and_then(|s| s.moved_from.get(self.key())).copied()
     }
 
     fn key(self) -> &'static str {
