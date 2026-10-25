@@ -299,9 +299,30 @@ fn wire(window: &AppWindow, ui: &Ui) {
                     anyhow::anyhow!("{}", t("{} was not found.").replacen("{}", tool.name(), 1))
                 })?;
                 let plan = actions::import_plan(layout, &source);
+                let blocked = import::in_use(&source);
                 ui.progress(String::new());
                 *pending.lock().unwrap() = Some((tool, source.root));
-                ui.on_ui(move |w| w.global::<Backend>().set_import_plan(plan.into()));
+                ui.on_ui(move |w| {
+                    let b = w.global::<Backend>();
+                    b.set_import_plan(plan.into());
+                    b.set_import_blocked(blocked);
+                });
+                Ok(String::new())
+            })
+        }
+    });
+    b.on_stop_import_blocker({
+        let ui = ui.clone();
+        let pending = pending.clone();
+        move || {
+            let Some((tool, root)) = pending.lock().unwrap().clone() else { return };
+            ui.run(move |layout, ui| {
+                let (plan, blocked) = actions::stop_import_blocker(layout, ui, tool, &root)?;
+                ui.on_ui(move |w| {
+                    let b = w.global::<Backend>();
+                    b.set_import_plan(plan.into());
+                    b.set_import_blocked(blocked);
+                });
                 Ok(String::new())
             })
         }

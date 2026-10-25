@@ -326,3 +326,6 @@ msgstr "Keluar dari MeowServer"
 
 msgid "Closing this window keeps your sites running in the tray. Quit stops everything."
 msgstr "Menutup jendela ini membuat situs tetap jalan di tray. Keluar menghentikan semuanya."
+
+msgid "Stop its database"
+msgstr "Hentikan database-nya"

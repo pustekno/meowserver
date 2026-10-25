@@ -88,6 +88,8 @@ export global Backend {
     // FlyEnv), and the plan shown before anything is copied.
     in property <[Choice]> importers;
     in property <string> import-plan;
+    // The tool's database server is running, so its data cannot be copied.
+    in property <bool> import-blocked;
     in property <string> localhost-url;
     in property <string> setup-progress;
 
@@ -155,6 +157,7 @@ export global Backend {
     callback preview-import(string);
     callback confirm-import();
     callback cancel-import();
+    callback stop-import-blocker();
 
     callback search(string);
     callback pick-folder();

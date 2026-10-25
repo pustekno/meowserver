@@ -81,6 +81,10 @@ pub struct ImportArgs {
     /// Do not ask for confirmation.
     #[arg(long, short)]
     yes: bool,
+    /// Stop the tool's database servers first. Closing Laragon, for one,
+    /// leaves its MySQL running.
+    #[arg(long)]
+    stop: bool,
 }
 
 #[derive(Subcommand)]
@@ -405,7 +409,7 @@ pub fn defender(layout: &Layout, action: DefenderAction) -> Result<()> {
 }
 
 pub fn import(layout: &Layout, args: ImportArgs) -> Result<()> {
-    let ImportArgs { tool, path, in_place, dry_run, yes } = args;
+    let ImportArgs { tool, path, in_place, dry_run, yes, stop } = args;
     let source = match tool.as_deref() {
         None | Some("auto") => {
             let mut found = import::detect_all();
@@ -445,8 +449,16 @@ pub fn import(layout: &Layout, args: ImportArgs) -> Result<()> {
     for step in steps {
         println!("  - {step}");
     }
+    if stop && !dry_run && import::in_use(&source) {
+        for note in import::stop_databases(&source) {
+            println!("{note}");
+        }
+    }
     let running = import::in_use(&source).then(|| {
-        format!("{} is running; quit it first so its databases can be copied safely", source.tool.name())
+        format!(
+            "{}'s database server is running; quit it, or add --stop to stop it, so its databases can be copied safely",
+            source.tool.name()
+        )
     });
     if dry_run {
         if let Some(warning) = running {

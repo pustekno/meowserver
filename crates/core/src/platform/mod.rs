@@ -90,6 +90,30 @@ pub fn processes_under(root: &std::path::Path, stems: &[&str]) -> bool {
     })
 }
 
+/// Processes named one of `stems` (without `.exe`) whose executable is
+/// known to be inside `root`, as (pid, path). Safe to act on, unlike
+/// [`processes_under`], which also counts processes it cannot place.
+pub fn processes_in(root: &std::path::Path, stems: &[&str]) -> Vec<(u32, String)> {
+    imp::process_names()
+        .into_iter()
+        .filter(|(_, name)| {
+            let lower = name.to_ascii_lowercase();
+            stems.contains(&lower.strip_suffix(".exe").unwrap_or(&lower))
+        })
+        .filter_map(|(pid, _)| Some((pid, imp::process_path(pid)?)))
+        .filter(|(_, path)| std::path::Path::new(path).is_absolute() && is_inside(path, root))
+        .collect()
+}
+
+/// Ends a process at once (Windows) or asks it to end (`SIGTERM`).
+pub fn terminate(pid: u32) {
+    imp::terminate(pid);
+}
+
+pub fn is_alive(pid: u32) -> bool {
+    imp::process_names().iter().any(|(p, _)| *p == pid)
+}
+
 /// Ends every process started from exactly `exe`, such as the window of one
 /// MeowServer folder; copies in other folders are left alone. Returns how
 /// many were ended.

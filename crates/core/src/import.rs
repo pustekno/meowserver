@@ -6,15 +6,18 @@
 //! WampServer, and FlyEnv are found automatically. Their project folders
 //! are served where they are (parked or added, never moved) and their
 //! MySQL/MariaDB data is copied (default) or used in place. The other
-//! tool's files are only read.
+//! tool's files are only read; its database servers are stopped only when
+//! the user asks (`stop_databases`).
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
 use serde::Serialize;
 
 use crate::config::Config;
+use crate::ipc::{Client, Request};
 use crate::layout::Layout;
 use crate::platform::{self, EXE_SUFFIX, Os, os};
 use crate::service::datadir::{self, Found};
@@ -370,8 +373,60 @@ fn binary_version(server: &Path) -> Option<(Kind, Version)> {
 /// A database server of `source` is running, so its data files are in use
 /// and a copy would be torn. Only matters when there is data to import.
 pub fn in_use(source: &Source) -> bool {
-    !source.databases.is_empty()
-        && platform::processes_under(&source.root, &["mysqld", "mariadbd", "postgres"])
+    !source.databases.is_empty() && platform::processes_under(&source.root, DATABASE_SERVERS)
+}
+
+const DATABASE_SERVERS: &[&str] = &["mysqld", "mariadbd", "postgres"];
+
+/// Stops the database servers running from `source`'s folder, so their
+/// data can be copied. Closing Laragon leaves its MySQL running, for one.
+/// MySQL and MariaDB on the standard port are asked to shut down first
+/// (`mysqladmin`, as root without a password, the tools' default); what is
+/// still running after that is ended. InnoDB and PostgreSQL recover on
+/// their next start, as after a power cut. Nothing else is touched.
+pub fn stop_databases(source: &Source) -> Vec<String> {
+    let running = platform::processes_in(&source.root, DATABASE_SERVERS);
+    if running.is_empty() {
+        return Vec::new();
+    }
+    let mut notes = Vec::new();
+    let mut asked = false;
+    let on_standard_port: Vec<u32> = platform::port_owners(3306).into_iter().map(|(pid, _)| pid).collect();
+    for (pid, path) in &running {
+        let admin = Path::new(path).with_file_name(format!("mysqladmin{EXE_SUFFIX}"));
+        if on_standard_port.contains(pid) && admin.is_file() {
+            let ok = Command::new(&admin)
+                .args(["-u", "root", "-h", "127.0.0.1", "-P", "3306", "--connect-timeout=5", "shutdown"])
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .is_ok_and(|s| s.success());
+            if ok {
+                asked = true;
+                notes.push(format!("asked {path} to shut down"));
+            }
+        }
+    }
+    let gone = |deadline: Duration| {
+        let until = Instant::now() + deadline;
+        while running.iter().any(|(pid, _)| platform::is_alive(*pid)) {
+            if Instant::now() > until {
+                return false;
+            }
+            std::thread::sleep(Duration::from_millis(250));
+        }
+        true
+    };
+    // A clean shutdown flushes InnoDB and can take a while; give it time.
+    if !gone(Duration::from_secs(if asked { 30 } else { 0 })) {
+        for (pid, path) in running.iter().filter(|(pid, _)| platform::is_alive(*pid)) {
+            platform::terminate(*pid);
+            notes.push(format!("ended {path} (pid {pid})"));
+        }
+        gone(Duration::from_secs(10));
+    }
+    notes
 }
 
 /// What [`apply`] would do, as lines for the user to confirm.
@@ -387,13 +442,27 @@ pub fn describe(layout: &Layout, source: &Source, mode: Mode) -> Vec<String> {
     for db in &source.databases {
         let version = db.version.clone().unwrap_or_else(|| "unknown version".into());
         match mode {
-            Mode::Copy => out.push(format!(
-                "Copy {} data {} ({version}, {}) into {}.",
-                db.kind.id(),
-                db.path.display(),
-                human(db.bytes),
-                target(layout, db).display()
-            )),
+            Mode::Copy => out.push(match existing(layout, db) {
+                Existing::Databases(names) => format!(
+                    "Skip {} data {} ({version}): {} already has databases ({}).",
+                    db.kind.id(),
+                    db.path.display(),
+                    target(layout, db).display(),
+                    names.join(", ")
+                ),
+                found => format!(
+                    "Copy {} data {} ({version}, {}) into {}{}.",
+                    db.kind.id(),
+                    db.path.display(),
+                    human(db.bytes),
+                    target(layout, db).display(),
+                    if matches!(found, Existing::Empty) {
+                        ", setting MeowServer's empty one aside"
+                    } else {
+                        ""
+                    }
+                ),
+            }),
             Mode::InPlace => out.push(format!(
                 "Use {} data in place: {} ({version}). Never run {} and MeowServer at the same time.",
                 db.kind.id(),
@@ -440,23 +509,68 @@ pub fn apply(
     }
     let total: u64 = source.databases.iter().map(|d| d.bytes).sum();
     let mut done = 0u64;
+    // MeowServer's own database servers stopped to swap their data.
+    let mut restart: Vec<&str> = Vec::new();
     for db in &source.databases {
+        let mut aside: Option<PathBuf> = None;
         let line = db.version.as_deref().and_then(|v| v.parse::<Version>().ok()).map(|v| v.line());
         match mode {
             Mode::Copy => {
                 let dest = target(layout, db);
-                if dest.exists() {
-                    notes.push(format!("skipped {}: {} already exists", db.path.display(), dest.display()));
-                    continue;
+                match existing(layout, db) {
+                    Existing::None => {}
+                    Existing::Databases(names) => {
+                        notes.push(format!(
+                            "skipped {}: MeowServer's {} already has databases ({})",
+                            db.path.display(),
+                            dest.display(),
+                            names.join(", ")
+                        ));
+                        continue;
+                    }
+                    // A fresh server with only its system schemas: set it
+                    // aside (not deleted: it may hold accounts) and take
+                    // the imported data instead. Its files must be closed.
+                    Existing::Empty => {
+                        if let Ok(mut client) = Client::connect(layout)
+                            && client.call(Request::Stop { unit: db.kind.id().into() }).is_ok()
+                        {
+                            restart.push(db.kind.id());
+                        }
+                        let target = unused(&sibling(&dest, ".before-import"));
+                        std::fs::rename(&dest, &target).with_context(|| {
+                            format!(
+                                "setting aside {} (is MeowServer's {} still running?)",
+                                dest.display(),
+                                db.kind.id()
+                            )
+                        })?;
+                        aside = Some(target);
+                    }
                 }
-                let staging = dest.with_extension("importing");
+                let staging = sibling(&dest, ".importing");
                 let _ = std::fs::remove_dir_all(&staging);
-                copy_dir(&db.path, &staging, &mut |n| {
+                let copied = copy_dir(&db.path, &staging, &mut |n| {
                     done += n;
                     progress(done, total);
                 })
-                .with_context(|| format!("copying {}", db.path.display()))?;
-                std::fs::rename(&staging, &dest)?;
+                .and_then(|()| Ok(std::fs::rename(&staging, &dest)?));
+                if let Err(e) = copied {
+                    // Put MeowServer's own data back as it was.
+                    let _ = std::fs::remove_dir_all(&staging);
+                    if let Some(aside) = aside.take() {
+                        let _ = std::fs::rename(&aside, &dest);
+                    }
+                    restart_units(layout, &restart);
+                    return Err(e.context(format!("copying {}", db.path.display())));
+                }
+                if let Some(aside) = aside.take() {
+                    notes.push(format!(
+                        "MeowServer's empty {} data was set aside as {}",
+                        db.kind.id(),
+                        aside.display()
+                    ));
+                }
                 notes.push(format!("copied {} data to {}", db.kind.id(), dest.display()));
             }
             Mode::InPlace => {
@@ -474,13 +588,68 @@ pub fn apply(
             }
         }
     }
+    restart_units(layout, &restart);
     let _ = site::discover(layout, config);
     Ok(notes)
 }
 
-fn target(layout: &Layout, db: &Database) -> PathBuf {
+fn restart_units(layout: &Layout, units: &[&str]) {
+    if units.is_empty() {
+        return;
+    }
+    if let Ok(mut client) = Client::connect(layout) {
+        for unit in units {
+            if let Err(e) = client.call(Request::Start { unit: (*unit).into() }) {
+                log::warn!("import: starting {unit} again: {e:#}");
+            }
+        }
+    }
+}
+
+/// Where a copy of `db` goes: `data/<kind>-<line>`.
+pub fn target(layout: &Layout, db: &Database) -> PathBuf {
     let line = db.version.as_deref().and_then(|v| v.parse::<Version>().ok()).map(|v| v.line());
     layout.data().join(format!("{}-{}", db.kind.id(), line.unwrap_or_else(|| "imported".into())))
+}
+
+/// What is already at [`target`].
+pub enum Existing {
+    None,
+    /// A server that was started but never used: only its own schemas.
+    Empty,
+    /// Holds these databases; an import must not replace it.
+    Databases(Vec<String>),
+}
+
+pub fn existing(layout: &Layout, db: &Database) -> Existing {
+    let dest = target(layout, db);
+    if !dest.is_dir() {
+        return Existing::None;
+    }
+    // Every MySQL/MariaDB database is a folder; these come with the server.
+    const SYSTEM: [&str; 4] = ["mysql", "performance_schema", "sys", "information_schema"];
+    let names: Vec<String> = subdirs(&dest)
+        .iter()
+        .filter_map(|d| d.file_name().map(|n| n.to_string_lossy().into_owned()))
+        .filter(|n| !n.starts_with('#') && !SYSTEM.contains(&n.as_str()))
+        .collect();
+    if names.is_empty() { Existing::Empty } else { Existing::Databases(names) }
+}
+
+/// `path` plus a suffix (not `with_extension`: `mysql-8.4` has no
+/// extension, but `with_extension` would replace its `.4`).
+fn sibling(path: &Path, suffix: &str) -> PathBuf {
+    let mut name = path.as_os_str().to_owned();
+    name.push(suffix);
+    PathBuf::from(name)
+}
+
+/// `path`, or `path-2`, `path-3`, … if it is taken.
+fn unused(path: &Path) -> PathBuf {
+    (1..)
+        .map(|n| if n == 1 { path.to_path_buf() } else { sibling(path, &format!("-{n}")) })
+        .find(|p| !p.exists())
+        .unwrap()
 }
 
 fn size(dir: &Path) -> u64 {
@@ -578,6 +747,38 @@ mod tests {
         assert_eq!(s.projects[0].php.as_deref(), Some("8.4"));
         assert!(s.projects[0].path.ends_with("shop"), "served from the project, not public/");
         assert_eq!(s.databases[0].version.as_deref(), Some("8.4"));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn empty_meowserver_data_is_set_aside_but_used_data_is_kept() {
+        let root = tmp("swap");
+        let xampp_root = root.join("xampp");
+        for f in ["htdocs", "mysql/data/mysql", "mysql/data/shop"] {
+            std::fs::create_dir_all(xampp_root.join(f)).unwrap();
+        }
+        std::fs::write(xampp_root.join("mysql/data/mysql_upgrade_info"), "10.4.32-MariaDB").unwrap();
+        std::fs::write(xampp_root.join("mysql/data/shop/orders.ibd"), "rows").unwrap();
+        let layout = Layout::at(root.join("meow"));
+        let source = xampp(&xampp_root).unwrap();
+        let dest = layout.data().join("mariadb-10.4");
+
+        // A server that was started once: only its own schemas.
+        for f in ["mysql", "sys", "#innodb_temp"] {
+            std::fs::create_dir_all(dest.join(f)).unwrap();
+        }
+        assert!(matches!(existing(&layout, &source.databases[0]), Existing::Empty));
+        let mut config = Config::default();
+        apply(&layout, &mut config, &source, Mode::Copy, &mut |_, _| {}).unwrap();
+        assert!(dest.join("shop").join("orders.ibd").is_file(), "imported");
+        assert!(layout.data().join("mariadb-10.4.before-import").join("mysql").is_dir(), "kept aside");
+
+        // Now it holds `shop`: a second import must not replace it.
+        std::fs::write(dest.join("shop").join("orders.ibd"), "newer rows").unwrap();
+        assert!(matches!(existing(&layout, &source.databases[0]), Existing::Databases(_)));
+        let notes = apply(&layout, &mut config, &source, Mode::Copy, &mut |_, _| {}).unwrap();
+        assert!(notes.iter().any(|n| n.contains("already has databases")), "{notes:?}");
+        assert_eq!(std::fs::read_to_string(dest.join("shop").join("orders.ibd")).unwrap(), "newer rows");
         std::fs::remove_dir_all(root).unwrap();
     }
 

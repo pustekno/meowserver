@@ -296,7 +296,14 @@ data:
 Project folders are served where they are; nothing is moved. Data is copied
 by default (the other tool keeps working) or used in place. The plan is shown
 and confirmed before anything is copied, and copying is refused while that
-tool's database server is running. The other tool's files are only read.
+tool's database server is running. Closing Laragon leaves its MySQL running,
+so the plan offers to stop it: `mysqladmin shutdown` first, then ending the
+process (MySQL and PostgreSQL recover on their next start); nothing else of
+the other tool is stopped (`meow import --stop`). When MeowServer already
+started an empty server for that version, its data folder is set aside
+(`<name>.before-import`) and replaced, with that server stopped and started
+again around the copy; data that holds databases is never replaced. The
+other tool's files are only read.
 *Done when:* the owner's Laragon setup with MySQL 8.4 data runs on MeowServer
 without dump or import.
 

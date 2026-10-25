@@ -50,12 +50,21 @@ pub fn t(text: &str) -> String {
         "Import from {} ({}):" => "Impor dari {} ({}):",
         "serve every folder in {}" => "layani setiap folder di {}",
         "copy the {} databases ({})" => "salin database {} ({})",
+        "copy the {} databases ({}); MeowServer's empty one is set aside" => {
+            "salin database {} ({}); database MeowServer yang masih kosong disisihkan"
+        }
+        "skip the {} databases: MeowServer's already has databases ({})" => {
+            "lewati database {}: milik MeowServer sudah berisi database ({})"
+        }
         "Project folders stay where they are. Nothing in {} is changed." => {
             "Folder proyek tetap di tempatnya. Tidak ada yang diubah di {}."
         }
-        "{} is running. Quit it first so its databases can be copied safely." => {
-            "{} sedang berjalan. Tutup dulu agar database-nya bisa disalin dengan aman."
+        "{}'s database server is still running (closing {} does not always stop it). \
+         Stop it so its databases can be copied safely." => {
+            "Server database {} masih berjalan (menutup {} tidak selalu menghentikannya). \
+             Hentikan dulu agar database-nya bisa disalin dengan aman."
         }
+        "Stopping {}'s database…" => "Menghentikan database {}…",
         "Imported." => "Selesai diimpor.",
         "Trusted. Restart the browser if it was open." => {
             "Dipercaya. Mulai ulang browser jika sedang terbuka."

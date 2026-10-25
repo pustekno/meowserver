@@ -83,6 +83,27 @@ pub fn quick_setup(layout: &Layout, ui: &Ui) -> Result<()> {
     Ok(())
 }
 
+const RUNNING: &str = "{}'s database server is still running (closing {} does not always stop it). \
+                       Stop it so its databases can be copied safely.";
+
+/// Stops the database servers of the tool being imported (PRD F27), then
+/// returns the plan again and whether something is still running.
+pub fn stop_import_blocker(
+    layout: &Layout,
+    ui: &Ui,
+    tool: import::Tool,
+    root: &Path,
+) -> Result<(String, bool)> {
+    let source = import::detect(tool, Some(root))
+        .with_context(|| t("{} was not found.").replacen("{}", tool.name(), 1))?;
+    ui.progress(t("Stopping {}'s database…").replace("{}", tool.name()));
+    for note in import::stop_databases(&source) {
+        log_warn(&format!("import: {note}"));
+    }
+    ui.progress(String::new());
+    Ok((import_plan(layout, &source), import::in_use(&source)))
+}
+
 /// What importing `source` will do, in the window's language, for the user
 /// to confirm before anything is copied.
 pub fn import_plan(layout: &Layout, source: &import::Source) -> String {
@@ -101,18 +122,23 @@ pub fn import_plan(layout: &Layout, source: &import::Source) -> String {
     for db in &source.databases {
         let version = db.version.clone().unwrap_or_default();
         let what = format!("{} {version}", crate::snapshot::title(db.kind));
-        lines.push(format!(
-            "• {}",
-            fill("copy the {} databases ({})", &[what.trim(), &import::human(db.bytes)])
-        ));
+        let size = import::human(db.bytes);
+        let line = match import::existing(layout, db) {
+            import::Existing::None => fill("copy the {} databases ({})", &[what.trim(), &size]),
+            import::Existing::Empty => {
+                fill("copy the {} databases ({}); MeowServer's empty one is set aside", &[what.trim(), &size])
+            }
+            import::Existing::Databases(names) => fill(
+                "skip the {} databases: MeowServer's already has databases ({})",
+                &[what.trim(), &names.join(", ")],
+            ),
+        };
+        lines.push(format!("• {line}"));
     }
     lines.push(String::new());
     lines.push(fill("Project folders stay where they are. Nothing in {} is changed.", &[source.tool.name()]));
     if import::in_use(source) {
-        lines.push(fill(
-            "{} is running. Quit it first so its databases can be copied safely.",
-            &[source.tool.name()],
-        ));
+        lines.push(fill(RUNNING, &[source.tool.name(), source.tool.name()]));
     }
     lines.join("\n")
 }
@@ -121,14 +147,7 @@ pub fn import_from(layout: &Layout, ui: &Ui, tool: import::Tool, root: &Path) ->
     let source = import::detect(tool, Some(root))
         .with_context(|| t("{} was not found.").replacen("{}", tool.name(), 1))?;
     if import::in_use(&source) {
-        bail!(
-            "{}",
-            t("{} is running. Quit it first so its databases can be copied safely.").replacen(
-                "{}",
-                tool.name(),
-                1
-            )
-        );
+        bail!("{}", t(RUNNING).replace("{}", tool.name()));
     }
     let mut config = Config::load(layout)?;
     let notes = import::apply(layout, &mut config, &source, import::Mode::Copy, &mut |done, total| {

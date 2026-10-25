@@ -30,10 +30,18 @@ export component ImportChoices inherits VerticalLayout {
         HorizontalLayout {
             spacing: 8px;
             alignment: start;
-            Button {
-                text: @tr("Import");
+            if Backend.import-blocked: Button {
+                text: @tr("Stop its database");
                 primary: true;
                 enabled: !Backend.busy;
+                clicked => {
+                    Backend.stop-import-blocker();
+                }
+            }
+            Button {
+                text: @tr("Import");
+                primary: !Backend.import-blocked;
+                enabled: !Backend.busy && !Backend.import-blocked;
                 clicked => {
                     Backend.confirm-import();
                 }
