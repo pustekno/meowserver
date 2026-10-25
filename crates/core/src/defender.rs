@@ -8,7 +8,7 @@
 //! MeowServer folder and project folders is opt-in, needs one elevation
 //! prompt, and is undone by "Undo system changes" (PRD F36).
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use anyhow::{Result, bail};
@@ -38,7 +38,15 @@ pub fn wanted(layout: &Layout, config: &Config) -> Vec<PathBuf> {
     let mut paths = vec![layout.root().to_path_buf(), layout.resolve(&config.general.www)];
     paths.extend(config.general.parked.iter().cloned());
     for s in site::discover(layout, config).sites {
-        if s.source == Source::Added && !s.path.as_os_str().is_empty() {
+        if s.path.as_os_str().is_empty() {
+            continue;
+        }
+        // Defender sees the real path behind a junction or symbolic link,
+        // so a linked project (www\blog -> D:\blog) needs its target.
+        if let Some(target) = link_target(&s.path) {
+            paths.push(target);
+        }
+        if s.source == Source::Added {
             paths.push(s.path);
         }
     }
@@ -48,6 +56,20 @@ pub fn wanted(layout: &Layout, config: &Config) -> Vec<PathBuf> {
     let all = paths.clone();
     paths.retain(|p| !all.iter().any(|other| other != p && p.starts_with(other)));
     paths
+}
+
+/// Where `path` really is, when it is itself a link. Without the `\\?\`
+/// prefix `canonicalize` adds on Windows, which Defender does not accept.
+fn link_target(path: &Path) -> Option<PathBuf> {
+    if !std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_symlink()) {
+        return None;
+    }
+    let real = std::fs::canonicalize(path).ok()?;
+    let text = real.to_string_lossy();
+    Some(match text.strip_prefix(r"\\?\") {
+        Some(rest) if !rest.starts_with("UNC\\") => PathBuf::from(rest),
+        _ => real,
+    })
 }
 
 /// Folders that should be excluded but are not yet.

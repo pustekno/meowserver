@@ -97,12 +97,21 @@ fn scan(out: &mut Discovery, config: &Config, dir: &Path, source: Source) {
         }
         return;
     };
-    let mut folders: Vec<PathBuf> = entries
-        .filter_map(Result::ok)
-        .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
-        .map(|e| e.path())
-        .filter(|p| !p.file_name().is_some_and(|n| n.to_string_lossy().starts_with('.')))
-        .collect();
+    // `path.is_dir()` follows links: Laragon users keep projects on another
+    // drive and link them into www (junctions and symbolic links alike).
+    let mut folders = Vec::new();
+    for entry in entries.filter_map(Result::ok) {
+        let path = entry.path();
+        if path.file_name().is_some_and(|n| n.to_string_lossy().starts_with('.')) {
+            continue;
+        }
+        if path.is_dir() {
+            folders.push(path);
+        } else if entry.file_type().is_ok_and(|t| t.is_symlink()) {
+            let target = std::fs::read_link(&path).map(|t| t.display().to_string()).unwrap_or_default();
+            out.warnings.push(format!("{} links to {target}, which does not exist", path.display()));
+        }
+    }
     folders.sort();
     for folder in folders {
         let raw = folder.file_name().unwrap().to_string_lossy().into_owned();
@@ -164,5 +173,46 @@ mod tests {
         assert_eq!(slugify("asis").as_deref(), Some("asis"));
         assert_eq!(slugify("--a..b--").as_deref(), Some("a-b"));
         assert_eq!(slugify("___"), None);
+    }
+
+    /// A junction on Windows (what Laragon users make; no admin needed),
+    /// a symbolic link elsewhere.
+    fn link(target: &Path, link: &Path) {
+        #[cfg(windows)]
+        {
+            let status = std::process::Command::new("cmd")
+                .args(["/C", "mklink", "/J"])
+                .arg(link)
+                .arg(target)
+                .stdout(std::process::Stdio::null())
+                .status()
+                .unwrap();
+            assert!(status.success());
+        }
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(target, link).unwrap();
+    }
+
+    #[test]
+    fn linked_folders_in_www_are_sites() {
+        let root = std::env::temp_dir().join(format!("meow-links-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let elsewhere = root.join("elsewhere");
+        std::fs::create_dir_all(root.join("www").join("plain")).unwrap();
+        std::fs::create_dir_all(elsewhere.join("shop").join("public")).unwrap();
+        std::fs::create_dir_all(elsewhere.join("gone")).unwrap();
+        std::fs::write(elsewhere.join("shop").join("artisan"), "").unwrap();
+        std::fs::write(elsewhere.join("shop").join("public").join("index.php"), "").unwrap();
+        link(&elsewhere.join("shop"), &root.join("www").join("shop"));
+        link(&elsewhere.join("gone"), &root.join("www").join("gone"));
+        std::fs::remove_dir(elsewhere.join("gone")).unwrap();
+
+        let layout = Layout::at(root.clone());
+        let found = discover(&layout, &Config::default());
+        let names: Vec<&str> = found.sites.iter().map(|s| s.name.as_str()).collect();
+        assert_eq!(names, ["plain", "shop"]);
+        assert!(found.sites[1].docroot.ends_with("public"), "detection looks through the link");
+        assert!(found.warnings.iter().any(|w| w.contains("does not exist")), "{:?}", found.warnings);
+        std::fs::remove_dir_all(root).unwrap();
     }
 }

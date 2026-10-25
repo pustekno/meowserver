@@ -297,8 +297,8 @@ fn subdirs(dir: &Path) -> Vec<PathBuf> {
         .into_iter()
         .flatten()
         .filter_map(Result::ok)
-        .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
         .map(|e| e.path())
+        .filter(|p| p.is_dir()) // follows junctions and symbolic links
         .collect();
     out.sort();
     out
