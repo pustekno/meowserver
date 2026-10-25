@@ -105,6 +105,8 @@ Name: "{autodesktop}\MeowServer"; Filename: "{app}\meowserver.exe"; IconFilename
 ; on itself, and a child would inherit it and refuse the folder links (junctions)
 ; Laragon users keep their projects behind.
 Filename: "{win}\explorer.exe"; Parameters: """{app}\meowserver.exe"""; Description: "{cm:LaunchProgram,MeowServer}"; Flags: nowait postinstall skipifsilent
+; An update started from MeowServer's window runs silently: open it again.
+Filename: "{win}\explorer.exe"; Parameters: """{app}\meowserver.exe"""; Flags: nowait; Check: WizardSilent
 
 [UninstallRun]
 Filename: "{app}\meow.exe"; Parameters: "quit"; Flags: runhidden waituntilterminated; RunOnceId: "quit"

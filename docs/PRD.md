@@ -268,6 +268,18 @@ checksums for these, so they come only from downloads.php.net over HTTPS.
 macOS and Linux builds have their extensions compiled in.
 *Done when:* `new Imagick()` works after one click on a fresh PHP 8.4.
 
+**F46 — Sharing and updates without telemetry.** MeowServer counts
+nothing. Downloads are counted by GitHub Releases (published by the release
+workflow on every version tag; 0.x as pre-releases). Once, after two weeks
+of use, Home shows "Like MeowServer?" with Star on GitHub, Copy link, Later
+(three months), and Don't show again; its dates stay in
+`data/app-state.json`. It shows nothing from anyone else and sends nothing,
+so it is not an ad. Settings checks for updates on request, and Update
+downloads the release's installer, checks it against GitHub's SHA-256, and
+runs it silently on this folder (portable folders too), which reopens
+MeowServer afterwards. Ideas and questions go to GitHub Discussions, linked
+from Settings; issue templates cover bugs and ideas.
+
 **F45 — PHP security releases.** MeowServer knows the first release of
 each PHP line with the latest security fixes (currently PHP2Shell,
 CVE-2026-109618 and CVE-2026-109619: 8.2.35, 8.3.36, 8.4.27, 8.5.12) and
@@ -1293,6 +1305,7 @@ directly:
 | 2026-10-25 | Owner request after slow Laragon sites on interns' laptops: performance rules in §8.7, Defender exclusions (F39), dev-server ports (F40). Evidence in ADR 0007. |
 | 2026-10-25 | Owner request: import is not Laragon-only. F27 now detects XAMPP, WampServer, and FlyEnv too, and shows the plan before copying. |
 | 2026-10-25 | Owner request: MySQL clashed with Laragon. Services now move to a free port and save it (F41). The `meow` command name may be taken by another program; Doctor reports which `meow` a terminal runs. |
+| 2026-10-25 | Owner request: counting installs was dropped as telemetry; downloads come from GitHub Releases (new release workflow), a one-time share card instead (F46), update from Settings, Discussions for the community. |
 | 2026-10-25 | Owner request: more PHP extensions (F44, PECL for Windows) and an answer on PHP2Shell (F45). 8.5.12 is current and fixed; older patch levels get an update button and a stopgap in php.ini. "Use port 3306 for MySQL" fixes projects set up for Laragon in one click; Home's problems can be copied. |
 | 2026-10-25 | Owner request: projects in other languages. Stage 1 done (F43): Node.js, Python (python-build-standalone, the builds uv uses), and Go, with detection, per-project versions, a port behind the site name, and dev servers started by hand only. Home lists every port of every service, as Laragon does. |
 | 2026-10-25 | Owner request: domain per project (default `.localhost`, `.test` where wanted; F15), several MySQL/MariaDB versions at once (F24), import copies projects stored inside the old tool and follows its links so the tool can be removed (F27), ports return once free (F41), and project needs read from composer.json and settings (F42). Found while testing: Inno Setup 6.7 enforces Windows' RedirectionGuard on Setup, and programs Setup starts inherit it and refuse junctions made without admin rights; Setup now starts MeowServer through Explorer, the window restarts itself through Explorer when it finds the guard, and Doctor reports it. |

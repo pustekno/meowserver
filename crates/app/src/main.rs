@@ -8,6 +8,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod actions;
+mod nudge;
 mod snapshot;
 mod tr;
 
@@ -190,6 +191,7 @@ fn main() -> Result<()> {
     b.set_attribution(branding::ATTRIBUTION.into());
     b.set_root_dir(layout.root().display().to_string().into());
     b.set_defender_available(platform::os() == platform::Os::Windows);
+    b.set_show_share(nudge::share_due(&layout));
     b.set_kinds(strings(KINDS.iter().map(|k| snapshot::title(*k).to_owned())));
     if let Some(e) = daemon_error {
         show(&window, &format!("{e:#}"), true);
@@ -494,6 +496,61 @@ fn wire(window: &AppWindow, ui: &Ui) {
             // Anything else is something to install.
             if let Some(w) = weak.upgrade() {
                 w.global::<Backend>().invoke_install_service(action);
+            }
+        }
+    });
+    b.on_check_update({
+        let ui = ui.clone();
+        move || {
+            ui.run(|_, ui| {
+                ui.progress(t("Checking for updates…"));
+                let found = meow_core::update::check(&meow_core::http::Http::new())?;
+                ui.progress(String::new());
+                let version = found.as_ref().map(|a| a.version.to_string()).unwrap_or_default();
+                ui.on_ui(move |w| w.global::<Backend>().set_update_version(version.into()));
+                Ok(match found {
+                    Some(a) => t("MeowServer {} is available").replace("{}", &a.version.to_string()),
+                    None => t("MeowServer is up to date."),
+                })
+            })
+        }
+    });
+    b.on_install_update({
+        let ui = ui.clone();
+        move || {
+            ui.run(|layout, ui| {
+                let http = meow_core::http::Http::new();
+                let found = meow_core::update::check(&http)?
+                    .ok_or_else(|| anyhow::anyhow!("{}", t("MeowServer is up to date.")))?;
+                meow_core::update::install(layout, &http, &found, &mut |got, total| {
+                    let total = total.map(|t| format!(" / {}", import::human(t))).unwrap_or_default();
+                    ui.progress(format!("{} {}{total}", t("Downloading the update:"), import::human(got)));
+                })?;
+                // The installer quits MeowServer, updates it, and opens it again.
+                let _ = slint::invoke_from_event_loop(|| {
+                    let _ = slint::quit_event_loop();
+                });
+                Ok(String::new())
+            })
+        }
+    });
+    b.on_share_later({
+        let ui = ui.clone();
+        let weak = window.as_weak();
+        move || {
+            nudge::share_later(&ui.layout);
+            if let Some(w) = weak.upgrade() {
+                w.global::<Backend>().set_show_share(false);
+            }
+        }
+    });
+    b.on_share_never({
+        let ui = ui.clone();
+        let weak = window.as_weak();
+        move || {
+            nudge::share_never(&ui.layout);
+            if let Some(w) = weak.upgrade() {
+                w.global::<Backend>().set_show_share(false);
             }
         }
     });

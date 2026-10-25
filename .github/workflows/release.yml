@@ -1,0 +1,53 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Publishes a GitHub Release when a version tag (v0.2.0) is pushed: the
+# Windows installer and the portable zip (PRD §15). Download counts show on
+# the release page and through the GitHub API; MeowServer itself sends
+# nothing. 0.x versions are marked as pre-releases.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    name: Windows installer and zip
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Inno Setup 6.7.3 (checksum verified)
+        shell: pwsh
+        run: |
+          $exe = "$env:RUNNER_TEMP\innosetup.exe"
+          Invoke-WebRequest https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe -OutFile $exe
+          $hash = (Get-FileHash $exe -Algorithm SHA256).Hash
+          if ($hash -ne "9C73C3BAE7ED48D44112A0F48E66742C00090BDB5BEF71D9D3C056C66E97B732") { throw "checksum mismatch: $hash" }
+          Start-Process $exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/CURRENTUSER','/NORESTART','/NOICONS' -Wait
+      - name: The tag matches the version being built
+        shell: pwsh
+        run: |
+          $version = (Select-String Cargo.toml -Pattern '^version = "(.+)"').Matches[0].Groups[1].Value
+          if ("v$version" -ne "${{ github.ref_name }}") { throw "tag ${{ github.ref_name }} but Cargo.toml says $version" }
+      - name: cargo xtask dist
+        shell: pwsh
+        run: |
+          cargo xtask dist
+          if (-not (Test-Path dist/*-setup.exe)) { throw "the installer was not built" }
+      - name: Publish the release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $pre = if ($tag -like "v0.*") { "--prerelease" } else { "" }
+          $notes = @"
+          Windows: run the setup. It installs for your user only (no administrator rights) into C:\MeowServer, or updates the folder you already have, keeping projects, databases, and settings. The zip is the same program without an installer.
+
+          Not code-signed yet, so Windows SmartScreen and the UAC prompt show "Unknown publisher".
+          "@
+          gh release create $tag (Get-ChildItem dist/*-setup.exe, dist/*.zip) --title "MeowServer $($tag.TrimStart('v'))" --notes $notes --generate-notes $pre

@@ -63,6 +63,33 @@ meow doctor                       # apa yang salah, dan cara memperbaikinya
 
 `meow --help` menampilkan semua perintah.
 
+## Unduh
+
+Installer dan zip portable ada di
+[halaman Releases](https://github.com/pustekno/meowserver/releases). Versi
+sebelum 1.0 adalah pre-release. Update tidak mengubah proyek, database,
+dan pengaturanmu: jalankan setup yang lebih baru, atau tekan Update di
+Pengaturan.
+
+## Privasi
+
+MeowServer tidak mengirim apa pun tentang kamu atau proyekmu: tanpa
+telemetri, tanpa penghitungan instalasi, tanpa iklan. Permintaan yang
+dibuatnya sendiri hanyalah pemeriksaan update harian ke GitHub (opsional,
+mati secara default) dan unduhan yang kamu minta. Setelah dua minggu
+dipakai, Beranda sekali bertanya apakah kamu mau membagikan MeowServer
+atau memberi bintang di GitHub; "Jangan tampilkan lagi" menghentikannya.
+
+## Komunitas
+
+- Pertanyaan, ide, dan berbagi setup:
+  [Discussions](https://github.com/pustekno/meowserver/discussions)
+- Ada yang rusak: Pengaturan → Laporkan masalah, atau
+  [buat issue](https://github.com/pustekno/meowserver/issues/new/choose)
+- Ikut berkontribusi: lihat [CONTRIBUTING.md](CONTRIBUTING.md)
+
+Bahasa Indonesia dan Inggris sama-sama boleh.
+
 ## Build dari source
 
 ```

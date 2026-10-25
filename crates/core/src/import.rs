@@ -631,8 +631,15 @@ pub fn apply(
             notes.push(format!("{} is no longer parked; its projects are added one by one", dir.display()));
         }
     }
-    let total: u64 = source.databases.iter().map(|d| d.bytes).sum::<u64>()
-        + source.projects.iter().filter(|p| p.copy).map(|p| p.bytes).sum::<u64>();
+    let copies_data =
+        |db: &&Database| mode == Mode::Copy && !matches!(existing(layout, db), Existing::Databases(_));
+    let total: u64 = source.databases.iter().filter(copies_data).map(|d| d.bytes).sum::<u64>()
+        + source
+            .projects
+            .iter()
+            .filter(|p| p.copy && !www_of(layout, config).join(&p.name).exists())
+            .map(|p| p.bytes)
+            .sum::<u64>();
     let mut done = 0u64;
     let www = layout.resolve(&config.general.www);
     for p in &source.projects {
@@ -644,16 +651,28 @@ pub fn apply(
             }
             let staging = sibling(&dest, ".importing");
             let _ = std::fs::remove_dir_all(&staging);
-            let copied = copy_dir(&p.path, &staging, &mut |n| {
+            let copied = copy_project(&p.path, &staging, &mut |n| {
                 done += n;
                 progress(done, total);
             })
-            .and_then(|()| Ok(std::fs::rename(&staging, &dest)?));
-            if let Err(e) = copied {
-                let _ = std::fs::remove_dir_all(&staging);
-                return Err(e.context(format!("copying {}", p.path.display())));
-            }
+            .and_then(|left_out| {
+                std::fs::rename(&staging, &dest)?;
+                Ok(left_out)
+            });
+            let left_out = match copied {
+                Ok(left_out) => left_out,
+                Err(e) => {
+                    let _ = std::fs::remove_dir_all(&staging);
+                    return Err(e.context(format!("copying {}", p.path.display())));
+                }
+            };
             notes.push(format!("copied {} to {}", p.path.display(), dest.display()));
+            for file in left_out {
+                notes.push(format!(
+                    "not copied (this account may not read it; copy it yourself): {}",
+                    file.display()
+                ));
+            }
             match site::slugify(&p.name) {
                 Some(name) => name,
                 None => continue,
@@ -843,13 +862,34 @@ fn size(dir: &Path) -> u64 {
         .sum()
 }
 
+fn www_of(layout: &Layout, config: &Config) -> PathBuf {
+    layout.resolve(&config.general.www)
+}
+
+/// Copies a database folder: every file or nothing.
 fn copy_dir(from: &Path, to: &Path, progress: &mut dyn FnMut(u64)) -> Result<()> {
-    copy_tree(from, to, (from, to), progress)
+    copy_tree(from, to, (from, to), progress, &mut None)
+}
+
+/// Copies a project folder. A file this account may not read (a private
+/// key locked down by its owner) is left out and listed, instead of
+/// stopping the whole copy.
+fn copy_project(from: &Path, to: &Path, progress: &mut dyn FnMut(u64)) -> Result<Vec<PathBuf>> {
+    let mut skipped = Some(Vec::new());
+    copy_tree(from, to, (from, to), progress, &mut skipped)?;
+    Ok(skipped.unwrap_or_default())
 }
 
 /// Copies `from` into `to`; `roots` maps a link pointing inside the copied
-/// tree to the same place in the copy.
-fn copy_tree(from: &Path, to: &Path, roots: (&Path, &Path), progress: &mut dyn FnMut(u64)) -> Result<()> {
+/// tree to the same place in the copy. With `skipped`, files that cannot
+/// be read for lack of permission are listed there instead of failing.
+fn copy_tree(
+    from: &Path,
+    to: &Path,
+    roots: (&Path, &Path),
+    progress: &mut dyn FnMut(u64),
+    skipped: &mut Option<Vec<PathBuf>>,
+) -> Result<()> {
     std::fs::create_dir_all(to)?;
     for entry in std::fs::read_dir(from)? {
         let entry = entry?;
@@ -858,10 +898,17 @@ fn copy_tree(from: &Path, to: &Path, roots: (&Path, &Path), progress: &mut dyn F
         if kind.is_symlink() {
             copy_link(&entry.path(), &dest, roots, progress)?;
         } else if kind.is_dir() {
-            copy_tree(&entry.path(), &dest, roots, progress)?;
+            copy_tree(&entry.path(), &dest, roots, progress, skipped)?;
         } else {
-            let n = std::fs::copy(entry.path(), &dest)?;
-            progress(n);
+            match std::fs::copy(entry.path(), &dest) {
+                Ok(n) => progress(n),
+                Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied && skipped.is_some() => {
+                    skipped.as_mut().unwrap().push(entry.path());
+                }
+                Err(e) => {
+                    return Err(anyhow::Error::from(e).context(format!("copying {}", entry.path().display())));
+                }
+            }
         }
     }
     Ok(())

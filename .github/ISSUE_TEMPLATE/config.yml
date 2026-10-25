@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Questions and ideas (Discussions)
+    url: https://github.com/pustekno/meowserver/discussions
+    about: Ask how to do something, share a setup, or talk an idea through first. English or Indonesian.
+  - name: Security problem
+    url: https://github.com/pustekno/meowserver/blob/main/SECURITY.md
+    about: Please report security problems privately, as described in SECURITY.md.

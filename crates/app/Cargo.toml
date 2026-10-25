@@ -16,6 +16,7 @@ path = "src/main.rs"
 [dependencies]
 meow-core.workspace = true
 anyhow.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 slint = { version = "1.18", default-features = false, features = ["std", "compat-1-2", "backend-winit", "renderer-software", "accessibility"] }
 rfd = { version = "0.17", default-features = false }

@@ -79,6 +79,31 @@ MeowServer/
 └── ssl/               local certificate authority
 ```
 
+## Download
+
+The installer and the portable zip are on the
+[Releases page](https://github.com/pustekno/meowserver/releases). Versions
+before 1.0 are pre-releases. Updating keeps your projects, databases, and
+settings: run the newer setup, or press Update in Settings.
+
+## Privacy
+
+MeowServer sends nothing about you or your projects: no telemetry, no
+install counting, no ads. The only requests it makes on its own are the
+optional daily update check to GitHub (off by default) and the downloads
+you ask for. After two weeks of use, Home asks once whether you would like
+to share MeowServer or star it on GitHub; "Don't show again" ends that.
+
+## Community
+
+- Questions, ideas, and setups to share:
+  [Discussions](https://github.com/pustekno/meowserver/discussions)
+- Something broken: Settings → Report a problem, or
+  [open an issue](https://github.com/pustekno/meowserver/issues/new/choose)
+- Contributing: see [CONTRIBUTING.md](CONTRIBUTING.md)
+
+English or Indonesian are both fine everywhere.
+
 ## Building from source
 
 ```

@@ -170,6 +170,35 @@ export component SettingsPage inherits VerticalLayout {
                     }
                 }
                 Row {
+                    label: Backend.update-version == "" ? @tr("Updates") : @tr("MeowServer {} is available", Backend.update-version);
+                    hint: @tr("Downloads the installer from GitHub, checks it, and updates this folder. Projects, databases, and settings stay.");
+                    if Backend.update-version == "": Button {
+                        text: @tr("Check for updates");
+                        enabled: !Backend.busy;
+                        clicked => {
+                            Backend.check-update();
+                        }
+                    }
+                    if Backend.update-version != "": Button {
+                        text: @tr("Update now");
+                        primary: true;
+                        enabled: !Backend.busy;
+                        clicked => {
+                            Backend.install-update();
+                        }
+                    }
+                }
+                Row {
+                    label: @tr("Ideas or questions?");
+                    hint: @tr("Suggest features and ask questions on GitHub Discussions, open to everyone.");
+                    Button {
+                        text: @tr("Open discussions");
+                        clicked => {
+                            Backend.open-url("https://github.com/pustekno/meowserver/discussions");
+                        }
+                    }
+                }
+                Row {
                     label: @tr("Something wrong?");
                     hint: @tr("Opens a GitHub issue filled with MeowServer's version and recent log. You review it before sending; your sites' logs are not included.");
                     Button {

@@ -3283,6 +3283,7 @@ dependencies = [
  "anyhow",
  "meow-core",
  "rfd",
+ "serde",
  "serde_json",
  "slint",
  "slint-build",

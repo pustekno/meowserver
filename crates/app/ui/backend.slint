@@ -197,6 +197,14 @@ export global Backend {
     callback set-site-php(string, string);
     callback set-site-domain(string, int);
     callback toggle-app(string, bool);
+    // A newer release, found by "Check for updates" or the daily check.
+    in property <string> update-version;
+    callback check-update();
+    callback install-update();
+    // The one "share MeowServer" card (PRD F46).
+    in property <bool> show-share;
+    callback share-later();
+    callback share-never();
     // `php 7.4`, `postgres`: install; `port mysql 3306`: move a server there.
     callback fix-need(string);
 

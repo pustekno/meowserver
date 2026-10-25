@@ -163,6 +163,69 @@ export component HomePage inherits VerticalLayout {
                 }
             }
 
+            if Backend.update-version != "": Card {
+                HorizontalLayout {
+                    spacing: 12px;
+                    Text {
+                        text: @tr("MeowServer {} is available. Updating keeps your projects, databases, and settings.", Backend.update-version);
+                        wrap: word-wrap;
+                        vertical-alignment: center;
+                        horizontal-stretch: 1;
+                    }
+                    Button {
+                        text: @tr("Update now");
+                        primary: true;
+                        enabled: !Backend.busy;
+                        clicked => {
+                            Backend.install-update();
+                        }
+                    }
+                }
+            }
+
+            if Backend.show-share: Card {
+                Text {
+                    text: @tr("Like MeowServer?");
+                    font-weight: 600;
+                }
+                Text {
+                    text: @tr("Tell a friend or your team, or give it a star on GitHub. It helps other developers find it. MeowServer sends nothing about you.");
+                    wrap: word-wrap;
+                    color: Theme.muted;
+                }
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    Button {
+                        text: @tr("Star on GitHub");
+                        primary: true;
+                        clicked => {
+                            Backend.open-url("https://github.com/pustekno/meowserver");
+                            Backend.share-never();
+                        }
+                    }
+                    Button {
+                        text: @tr("Copy link");
+                        clicked => {
+                            root.copy("https://github.com/pustekno/meowserver");
+                            Backend.share-never();
+                        }
+                    }
+                    Button {
+                        text: @tr("Later");
+                        clicked => {
+                            Backend.share-later();
+                        }
+                    }
+                    Button {
+                        text: @tr("Don't show again");
+                        clicked => {
+                            Backend.share-never();
+                        }
+                    }
+                }
+            }
+
             if Backend.problems.length > 0: Card {
                 HorizontalLayout {
                     spacing: 16px;

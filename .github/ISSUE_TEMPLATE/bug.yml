@@ -1,0 +1,23 @@
+name: Something does not work
+description: A problem in MeowServer itself (not in a project of yours).
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Settings → Report a problem fills in your version and recent log for you. You can write in English or Indonesian.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to make it happen again
+  - type: input
+    id: version
+    attributes:
+      label: MeowServer version and operating system
+      placeholder: 0.1.0, Windows 11
