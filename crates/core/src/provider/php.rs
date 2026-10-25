@@ -27,15 +27,15 @@ impl Provider for Windows {
     fn releases(&self, http: &Http) -> Result<Vec<Release>> {
         let index: BTreeMap<String, serde_json::Value> =
             http.get_json(&format!("{WINDOWS_BASE}releases.json"))?;
-        let mut out: Vec<Release> = index.values().filter_map(windows_release).collect();
+        let mut out: Vec<Release> = index.values().filter_map(|e| windows_release(e, arch())).collect();
         sort_newest_first(&mut out);
         Ok(out)
     }
 }
 
-fn windows_release(entry: &serde_json::Value) -> Option<Release> {
+fn windows_release(entry: &serde_json::Value, arch: Arch) -> Option<Release> {
     let version: Version = entry.get("version")?.as_str()?.parse().ok()?;
-    let arch = match arch() {
+    let arch = match arch {
         Arch::X64 => "-x64",
         Arch::Arm64 => "-arm64",
     };
@@ -113,11 +113,12 @@ mod tests {
             "nts-vs17-x64": { "zip": { "path": "php-8.4.27-nts-Win32-vs17-x64.zip", "sha256": "bb" } },
             "nts-vs17-x86": { "zip": { "path": "php-8.4.27-nts-Win32-vs17-x86.zip", "sha256": "cc" } }
         });
-        let rel = windows_release(&entry).unwrap();
+        // The architecture is passed in, so the result does not depend on
+        // the machine running the test (CI's macOS runners are arm64).
+        let rel = windows_release(&entry, Arch::X64).unwrap();
         assert_eq!(rel.version.to_string(), "8.4.27");
-        if arch() == Arch::X64 {
-            assert!(rel.assets[0].url.ends_with("php-8.4.27-nts-Win32-vs17-x64.zip"));
-            assert_eq!(rel.assets[0].sha256.as_deref(), Some("bb"));
-        }
+        assert!(rel.assets[0].url.ends_with("php-8.4.27-nts-Win32-vs17-x64.zip"));
+        assert_eq!(rel.assets[0].sha256.as_deref(), Some("bb"));
+        assert!(windows_release(&entry, Arch::Arm64).is_none(), "no arm64 build in this entry");
     }
 }
