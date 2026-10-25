@@ -94,11 +94,12 @@ pub fn proxy(layout: &Layout, config: &mut Config, name: &str, target: &str) -> 
 /// A port for a project's own dev server (Vite, Next, `artisan serve`)
 /// that no other proxy site claims and nothing listens on (PRD F40).
 fn free_dev_port(config: &Config) -> Result<u16> {
-    let claimed: Vec<u16> = config
+    let mut claimed: Vec<u16> = config
         .sites
         .values()
         .filter_map(|s| s.proxy.as_deref()?.rsplit(':').next()?.trim_end_matches('/').parse().ok())
         .collect();
+    claimed.extend(config.sites.values().filter_map(|s| s.port));
     (3000..4000)
         .find(|p| !claimed.contains(p) && crate::platform::port_owners(*p).is_empty())
         .context("no free port between 3000 and 3999")
@@ -115,7 +116,13 @@ pub fn tidy(config: &mut Config) {
 }
 
 fn is_default(s: &SiteSettings) -> bool {
-    s.path.is_none() && s.php.is_none() && s.root.is_none() && s.proxy.is_none() && !s.force_https
+    s.path.is_none()
+        && s.php.is_none()
+        && s.root.is_none()
+        && s.proxy.is_none()
+        && !s.force_https
+        && s.suffix.is_none()
+        && s.port.is_none()
 }
 
 /// Windows `canonicalize` adds a `\\?\` prefix that other programs choke on.

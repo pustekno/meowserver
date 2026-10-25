@@ -28,6 +28,93 @@ pub struct Needs {
     /// project says nothing, or nothing known matches.
     pub php: Vec<String>,
     pub database: Option<Database>,
+    /// For a project that runs its own server: its runtime and version.
+    pub runtime: Option<Runtime>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Runtime {
+    pub kind: Kind,
+    /// As written (`>=18`, `3.12`, `>=1.22`); empty when the project does
+    /// not say.
+    pub constraint: String,
+}
+
+/// Lines offered when a project's runtime is not installed, newest first.
+/// Node: even majors (the long-term ones).
+fn candidates(kind: Kind) -> Vec<String> {
+    match kind {
+        Kind::Node => [26, 24, 22, 20, 18].iter().map(u32::to_string).collect(),
+        Kind::Python => (9..=14).rev().map(|m| format!("3.{m}")).collect(),
+        Kind::Go => (20..=27).rev().map(|m| format!("1.{m}")).collect(),
+        _ => Vec::new(),
+    }
+}
+
+impl Runtime {
+    /// Whether `line` (`22`, `3.12`, `1.27`) fits the constraint.
+    pub fn allows(&self, line: &str) -> bool {
+        if self.constraint.is_empty() {
+            return true;
+        }
+        let mut parts = line.split('.').map(|p| p.parse::<u32>().unwrap_or(0));
+        let major = parts.next().unwrap_or(0);
+        match parts.next() {
+            Some(minor) => allows(&self.constraint, major, minor),
+            // A Node major: any minor of it will do.
+            None => allows(&self.constraint, major, 0) || allows(&self.constraint, major, 99),
+        }
+    }
+
+    /// The newest line to install when nothing installed fits.
+    pub fn suggest(&self) -> String {
+        candidates(self.kind).into_iter().find(|l| self.allows(l)).unwrap_or_default()
+    }
+}
+
+/// The runtime version a project asks for, from the files each ecosystem
+/// uses for it.
+fn runtime(project: &Path, kind: Kind) -> Runtime {
+    let read = |rel: &str| std::fs::read_to_string(project.join(rel)).unwrap_or_default();
+    let first_line = |text: String| text.lines().next().unwrap_or_default().trim().to_owned();
+    let constraint = match kind {
+        Kind::Node => {
+            let pinned = first_line(read(".nvmrc")) + &first_line(read(".node-version"));
+            let pinned = pinned.trim_start_matches('v');
+            if pinned.starts_with(|c: char| c.is_ascii_digit()) {
+                // `20` or `20.11.1`: that major.
+                format!("^{}", pinned.split('.').next().unwrap_or(pinned))
+            } else {
+                serde_json::from_str::<serde_json::Value>(&read("package.json"))
+                    .ok()
+                    .and_then(|p| p.pointer("/engines/node").and_then(|v| v.as_str()).map(str::to_owned))
+                    .unwrap_or_default()
+            }
+        }
+        Kind::Python => {
+            let pinned = first_line(read(".python-version"));
+            if pinned.starts_with(|c: char| c.is_ascii_digit()) {
+                let line: Vec<&str> = pinned.split('.').take(2).collect();
+                format!("{}.*", line.join("."))
+            } else {
+                read("pyproject.toml")
+                    .lines()
+                    .find_map(|l| {
+                        let (key, value) = l.split_once('=')?;
+                        (key.trim() == "requires-python")
+                            .then(|| value.trim().trim_matches(['"', '\'']).to_owned())
+                    })
+                    .unwrap_or_default()
+            }
+        }
+        // `go 1.22` in go.mod is the oldest Go that builds the module.
+        Kind::Go => read("go.mod")
+            .lines()
+            .find_map(|l| l.trim().strip_prefix("go ").map(|v| format!(">={}", v.trim())))
+            .unwrap_or_default(),
+        _ => String::new(),
+    };
+    Runtime { kind, constraint }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -68,8 +155,9 @@ impl Family {
     }
 }
 
-pub fn read(project: &Path) -> Needs {
-    let mut needs = Needs::default();
+pub fn read(project: &Path, framework: super::Framework) -> Needs {
+    let mut needs =
+        Needs { runtime: framework.runtime().map(|kind| runtime(project, kind)), ..Needs::default() };
     if let Some(constraint) = php_constraint(project) {
         needs.php = PHP_LINES
             .iter()
@@ -85,12 +173,14 @@ pub fn read(project: &Path) -> Needs {
 
 /// Something a site needs that MeowServer does not provide yet.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
+#[serde(tag = "problem", rename_all = "snake_case")]
 pub enum Problem {
     /// No installed PHP version fits; `suggest` is the line to install.
     Php { constraint: String, running: String, suggest: String },
     /// The project uses a database server that is not installed.
     DatabaseMissing { family: Family },
+    /// No installed version of the project's runtime fits.
+    Runtime { kind: Kind, constraint: String, suggest: String },
     /// Installed, but nothing of MeowServer's listens on the project's port.
     DatabasePort { family: Family, port: u16, served: Vec<u16> },
 }
@@ -101,6 +191,7 @@ impl Problem {
         match self {
             Problem::Php { suggest, .. } => Some(("php", suggest.clone())),
             Problem::DatabaseMissing { family } => Some((family.kinds()[0].id(), String::new())),
+            Problem::Runtime { kind, suggest, .. } => Some((kind.id(), suggest.clone())),
             Problem::DatabasePort { .. } => None,
         }
     }
@@ -119,6 +210,16 @@ impl Problem {
                 family.name(),
                 family.kinds()[0].id()
             ),
+            Problem::Runtime { kind, constraint, suggest } if constraint.is_empty() => format!(
+                "{site} runs on {}, which is not installed (meow install {} {suggest})",
+                runtime_name(*kind),
+                kind.id()
+            ),
+            Problem::Runtime { kind, constraint, suggest } => format!(
+                "{site} needs {} {constraint}, and no installed version fits (meow install {} {suggest})",
+                runtime_name(*kind),
+                kind.id()
+            ),
             Problem::DatabasePort { family, port, served } => format!(
                 "{site} connects to {} on port {port}, but MeowServer's runs on {}; change the port in the project's \
                  settings, or run a version on {port} (meow db enable)",
@@ -129,10 +230,41 @@ impl Problem {
     }
 }
 
+pub fn runtime_name(kind: Kind) -> &'static str {
+    match kind {
+        Kind::Node => "Node.js",
+        Kind::Python => "Python",
+        Kind::Go => "Go",
+        _ => kind.id(),
+    }
+}
+
+/// The newest installed line of `runtime` that fits the project.
+pub fn pick_runtime(layout: &Layout, runtime: &Runtime) -> Option<String> {
+    let mut installed: Vec<crate::version::Version> =
+        service::installed(layout, runtime.kind).into_iter().map(|i| i.version).collect();
+    installed.sort();
+    installed.into_iter().rev().map(|v| line_of(runtime.kind, &v)).find(|l| runtime.allows(l))
+}
+
+/// How versions are picked: Node by major, the others by major.minor.
+pub fn line_of(kind: Kind, version: &crate::version::Version) -> String {
+    if kind == Kind::Node { version.major().to_string() } else { version.line() }
+}
+
 /// What `site` needs that is missing, judged from its own files.
 pub fn problems(layout: &Layout, config: &Config, site: &Site) -> Vec<Problem> {
     let mut out = Vec::new();
     let needs = &site.needs;
+    if let Some(runtime) = &needs.runtime
+        && site.runtime.is_none()
+    {
+        out.push(Problem::Runtime {
+            kind: runtime.kind,
+            constraint: runtime.constraint.clone(),
+            suggest: runtime.suggest(),
+        });
+    }
     if let Some(constraint) = &needs.php_constraint
         && !needs.php.is_empty()
     {
@@ -211,6 +343,9 @@ fn matches(constraint: &str, v: V) -> bool {
 }
 
 fn satisfies(comparator: &str, v: V) -> bool {
+    // `~=` is Python's compatible-release operator, like Composer's `~`.
+    let comparator = comparator.replace("~=", "~");
+    let comparator = comparator.as_str();
     let (op, rest) = ["^", "~", ">=", "<=", "!=", ">", "<", "=="]
         .iter()
         .find_map(|op| comparator.strip_prefix(op).map(|r| (*op, r)))
@@ -370,7 +505,7 @@ mod tests {
             ("composer.json", r#"{"require": {"php": "^7.4", "laravel/framework": "^8.0"}}"#),
             (".env", "APP_NAME=Shop\nDB_CONNECTION=pgsql\nDB_HOST=127.0.0.1\nDB_PORT=5433\n"),
         ]);
-        let needs = read(&dir);
+        let needs = read(&dir, crate::site::Framework::Php);
         assert_eq!(needs.php, ["7.4"]);
         assert_eq!(needs.database, Some(Database { family: Family::Postgres, port: 5433 }));
         std::fs::remove_dir_all(dir).unwrap();
@@ -382,7 +517,7 @@ mod tests {
             ("composer.json", r#"{"require": {"php": ">=7.2"}, "config": {"platform": {"php": "8.1.2"}}}"#),
             (".env", "database.default.DBDriver = MySQLi\ndatabase.default.port = 3307\n"),
         ]);
-        let needs = read(&dir);
+        let needs = read(&dir, crate::site::Framework::Php);
         assert_eq!(needs.php, ["8.1"], "the locked platform version wins");
         assert_eq!(needs.database, Some(Database { family: Family::Mysql, port: 3307 }));
         std::fs::remove_dir_all(&dir).unwrap();
@@ -391,12 +526,103 @@ mod tests {
             ".env",
             "DATABASE_URL=\"postgresql://app:secret@127.0.0.1:5432/app?serverVersion=16\"\n",
         )]);
-        assert_eq!(read(&dir).database, Some(Database { family: Family::Postgres, port: 5432 }));
+        assert_eq!(
+            read(&dir, crate::site::Framework::Php).database,
+            Some(Database { family: Family::Postgres, port: 5432 })
+        );
         std::fs::remove_dir_all(&dir).unwrap();
 
         let dir = project(&[("wp-config.php", "<?php\ndefine( 'DB_HOST', 'localhost:3308' );\n")]);
-        assert_eq!(read(&dir).database, Some(Database { family: Family::Mysql, port: 3308 }));
-        assert!(read(&dir).php.is_empty(), "WordPress has no composer.json");
+        assert_eq!(
+            read(&dir, crate::site::Framework::Php).database,
+            Some(Database { family: Family::Mysql, port: 3308 })
+        );
+        assert!(read(&dir, crate::site::Framework::Php).php.is_empty(), "WordPress has no composer.json");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn runtime_versions_from_project_files() {
+        let check = |files: &[(&str, &str)], framework, yes: &[&str], no: &[&str]| {
+            let dir = project(files);
+            let runtime = read(&dir, framework).runtime.expect("a runtime");
+            for line in yes {
+                assert!(runtime.allows(line), "{files:?} should allow {line}");
+            }
+            for line in no {
+                assert!(!runtime.allows(line), "{files:?} should not allow {line}");
+            }
+            std::fs::remove_dir_all(&dir).unwrap();
+        };
+        use crate::site::Framework::{Django, Go, Node};
+        check(
+            &[
+                (
+                    ".nvmrc",
+                    "v20.11.1
+",
+                ),
+                ("package.json", "{}"),
+            ],
+            Node,
+            &["20"],
+            &["18", "22"],
+        );
+        check(&[("package.json", r#"{"engines": {"node": ">=18"}}"#)], Node, &["18", "22", "24"], &["16"]);
+        check(
+            &[("package.json", r#"{"engines": {"node": "^20 || ^22"}}"#)],
+            Node,
+            &["20", "22"],
+            &["18", "24"],
+        );
+        check(
+            &[(
+                ".python-version",
+                "3.12.4
+",
+            )],
+            Django,
+            &["3.12"],
+            &["3.11", "3.13"],
+        );
+        check(
+            &[(
+                "pyproject.toml",
+                "[project]
+requires-python = \">=3.10,<3.13\"
+",
+            )],
+            Django,
+            &["3.10", "3.12"],
+            &["3.9", "3.13"],
+        );
+        check(
+            &[(
+                "pyproject.toml",
+                "requires-python = \"~=3.11\"
+",
+            )],
+            Django,
+            &["3.11", "3.14"],
+            &["3.10"],
+        );
+        check(
+            &[(
+                "go.mod",
+                "module app
+
+go 1.22.3
+",
+            )],
+            Go,
+            &["1.22", "1.27"],
+            &["1.21"],
+        );
+        // Nothing said: any version will do, and the newest is offered.
+        let dir = project(&[("package.json", "{}")]);
+        let runtime = read(&dir, Node).runtime.unwrap();
+        assert!(runtime.allows("24"));
+        assert_eq!(runtime.suggest(), "26");
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

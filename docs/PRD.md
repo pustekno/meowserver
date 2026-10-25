@@ -436,6 +436,32 @@ Doctor, and in `meow doctor`. Project files are only read.
 shows "Install PHP 7.4", and runs on 7.4 once it is installed without the
 user choosing it.
 
+**F43 — Projects with their own server.** Node.js (Next, Nuxt, Vite, any
+`npm run dev`), Python (Django, Flask, FastAPI), and Go projects run their
+own development server; PHP and static sites are the only ones that need a
+web server. MeowServer recognises them (`package.json` with a `dev` or
+`start` script, `manage.py`, Flask or FastAPI in the requirements, `go.mod`;
+PHP frameworks are checked first, so a Laravel project with Vite stays a PHP
+site), installs their runtimes like PHP (Node from nodejs.org, Python from
+python-build-standalone, Go from go.dev, all with checksums, several
+versions side by side), picks the newest installed version the project
+allows (`.nvmrc`, `engines.node`, `.python-version`, `requires-python`,
+`go.mod`), and gives each project a port (from 3000, kept in
+`sites.<name>.port` once started) behind its name, `<name>.localhost` or
+`.test`. The server starts only when asked (Sites page Start/Stop with its
+Log, `meow dev start|stop <site>`), never on its own: development servers
+use a lot of memory. Python projects use their own `.venv` when they have
+one. The port reaches the server as `PORT` and, for Vite, Next, and Nuxt,
+as their own flags.
+*Done when:* a Next, a Flask, and a Go project open at their names after
+pressing Start, each on the runtime version it asks for.
+
+Languages are added in stages. Stage 1: PHP, Node.js, Python, Go. Stage 2:
+Java (Temurin, with Maven or Gradle) and Bun. Later, on demand: .NET, Ruby;
+Rust is only detected when installed, not downloaded. Deno is not planned:
+its team moved to Cloudflare in October 2026 and its own development ends
+after a year of fixes.
+
 ### 5.3 Out of scope
 
 - Production use. No hardening for public exposure.
@@ -1243,6 +1269,7 @@ directly:
 | 2026-10-25 | Owner request after slow Laragon sites on interns' laptops: performance rules in §8.7, Defender exclusions (F39), dev-server ports (F40). Evidence in ADR 0007. |
 | 2026-10-25 | Owner request: import is not Laragon-only. F27 now detects XAMPP, WampServer, and FlyEnv too, and shows the plan before copying. |
 | 2026-10-25 | Owner request: MySQL clashed with Laragon. Services now move to a free port and save it (F41). The `meow` command name may be taken by another program; Doctor reports which `meow` a terminal runs. |
+| 2026-10-25 | Owner request: projects in other languages. Stage 1 done (F43): Node.js, Python (python-build-standalone, the builds uv uses), and Go, with detection, per-project versions, a port behind the site name, and dev servers started by hand only. Home lists every port of every service, as Laragon does. |
 | 2026-10-25 | Owner request: domain per project (default `.localhost`, `.test` where wanted; F15), several MySQL/MariaDB versions at once (F24), import copies projects stored inside the old tool and follows its links so the tool can be removed (F27), ports return once free (F41), and project needs read from composer.json and settings (F42). Found while testing: Inno Setup 6.7 enforces Windows' RedirectionGuard on Setup, and programs Setup starts inherit it and refuse junctions made without admin rights; Setup now starts MeowServer through Explorer, the window restarts itself through Explorer when it finds the guard, and Doctor reports it. |
 | 2026-10-25 | Owner request: a Windows installer for first install and updates that never deletes data. Inno Setup 6 (free for open source; the only build tool that is not Rust), per user without administrator rights, default `C:\MeowServer` because data lives next to the program; Program Files is refused. Updates replace only the program files; uninstall keeps `www`, `data`, `bin`, and settings. |
 

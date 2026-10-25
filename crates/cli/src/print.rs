@@ -49,7 +49,13 @@ pub fn sites(sites: &[Site], warnings: &[String]) {
             None => s.docroot.display().to_string(),
         };
         let php = s.php.as_deref().map(|v| format!("  [php {v}]")).unwrap_or_default();
-        println!("{url:<width$} {target}{php}");
+        // Projects with their own server: runtime and how to start it.
+        let app = match (s.framework.runtime(), &s.runtime) {
+            (Some(kind), Some(line)) => format!("  [{} {line}; meow dev start {}]", kind.id(), s.name),
+            (Some(kind), None) => format!("  [{}: not installed]", kind.id()),
+            _ => String::new(),
+        };
+        println!("{url:<width$} {target}{php}{app}");
     }
     for w in warnings {
         println!("warning: {w}");

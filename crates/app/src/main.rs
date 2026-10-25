@@ -30,7 +30,7 @@ use tr::t;
 
 slint::include_modules!();
 
-const KINDS: [Kind; 11] = [
+const KINDS: [Kind; 13] = [
     Kind::Php,
     Kind::Caddy,
     Kind::Nginx,
@@ -42,6 +42,8 @@ const KINDS: [Kind; 11] = [
     Kind::Mailpit,
     Kind::Node,
     Kind::Composer,
+    Kind::Python,
+    Kind::Go,
 ];
 
 const INI_FIELDS: [(&str, &str); 6] = [
@@ -128,6 +130,7 @@ impl Ui {
 #[derive(Default)]
 struct Local {
     sites: Vec<site::Site>,
+    apps_running: Vec<String>,
     /// Every extension the selected PHP build ships, and the ones ticked.
     php_available: Vec<String>,
     php_ext: BTreeSet<String>,
@@ -471,6 +474,21 @@ fn wire(window: &AppWindow, ui: &Ui) {
         }
     });
 
+    b.on_toggle_app({
+        let ui = ui.clone();
+        move |name, start| {
+            let name = name.to_string();
+            ui.run(move |layout, _| {
+                if start {
+                    actions::call(layout, Request::StartApp { site: name.clone() })?;
+                    Ok(t("Started. The first start of a project can take a while; see its Log."))
+                } else {
+                    actions::call(layout, Request::StopApp { site: name })?;
+                    Ok(String::new())
+                }
+            })
+        }
+    });
     b.on_set_site_domain({
         let ui = ui.clone();
         move |name, index| {
@@ -567,7 +585,7 @@ fn wire(window: &AppWindow, ui: &Ui) {
                             actions::call(l, Request::Restart { unit: kind.id().into() })?;
                         }
                     }
-                    Kind::Node | Kind::Composer => {}
+                    Kind::Node | Kind::Composer | Kind::Python | Kind::Go => {}
                 }
                 Ok(format!("{} {line} {}", snapshot::title(kind), t("is now active.")))
             });
@@ -1006,6 +1024,7 @@ fn apply(w: &AppWindow, snap: &snapshot::Snapshot, local: &mut Local) {
     b.set_ca_trusted(meow_core::tls::is_trusted(&w_layout(w)));
 
     local.sites = snap.sites.clone();
+    local.apps_running = snap.apps_running.clone();
     show_sites(w, local);
 }
 
@@ -1029,13 +1048,28 @@ fn show_sites(w: &AppWindow, local: &Local) {
             (s, need, install, label)
         })
         .map(|(s, need, need_install, need_install_label)| SiteRow {
+            app: s.framework.runtime().is_some(),
+            runtime: match (s.framework.runtime(), &s.runtime) {
+                (Some(kind), Some(line)) => {
+                    format!("{} {line} :{}", site::needs::runtime_name(kind), s.app_port.unwrap_or_default())
+                        .into()
+                }
+                _ => SharedString::new(),
+            },
+            app_running: local.apps_running.contains(&s.name),
+            app_log: meow_core::app::log_file(&layout, &s.name).display().to_string().into(),
             need: need.into(),
             need_install: need_install.into(),
             need_install_label: need_install_label.into(),
             name: s.name.clone().into(),
             host: s.host.clone().into(),
             url: snapshot::site_url(s, &config).into(),
-            folder: s.proxy.clone().unwrap_or_else(|| s.path.display().to_string()).into(),
+            // A project with its own server is shown by its folder, not its port.
+            folder: if s.framework.runtime().is_some() {
+                s.path.display().to_string().into()
+            } else {
+                s.proxy.clone().unwrap_or_else(|| s.path.display().to_string()).into()
+            },
             php: s.php.clone().unwrap_or_else(|| "default".into()).into(),
             domain_index: if s.host.ends_with(".test") { 1 } else { 0 },
             php_index: s
@@ -1044,7 +1078,16 @@ fn show_sites(w: &AppWindow, local: &Local) {
                 .and_then(|p| choices.iter().position(|c| c == p || p.starts_with(&format!("{c}."))))
                 .unwrap_or(0) as i32,
             source: snapshot::source_label(&s.source).into(),
-            framework: snapshot::framework(s.framework).into(),
+            // `Go 1.27 :3001`, not `Go · Go 1.27 :3001`.
+            framework: match s.framework.runtime() {
+                Some(kind)
+                    if snapshot::framework(s.framework) == site::needs::runtime_name(kind)
+                        && s.runtime.is_some() =>
+                {
+                    SharedString::new()
+                }
+                _ => snapshot::framework(s.framework).into(),
+            },
             removable: s.source == site::Source::Added,
             proxy: s.proxy.is_some(),
         })

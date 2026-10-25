@@ -23,6 +23,33 @@ pub fn list(layout: &Layout, json: bool) -> Result<()> {
     Ok(())
 }
 
+#[derive(clap::Subcommand)]
+pub enum DevAction {
+    /// Start the project's dev server (npm run dev, manage.py runserver, go run .).
+    Start { site: String },
+    /// Stop it.
+    Stop { site: String },
+}
+
+pub fn dev(layout: &Layout, action: DevAction) -> Result<()> {
+    use meow_core::ipc::Request;
+    match action {
+        DevAction::Start { site } => {
+            daemon::call(layout, Request::StartApp { site: site.clone() })?;
+            let config = Config::load(layout)?;
+            if let Some(s) = site::discover(layout, &config).sites.into_iter().find(|s| s.name == site) {
+                println!("Started. Open http://{}", s.host);
+                println!("Its output: {}", meow_core::app::log_file(layout, &site).display());
+            }
+        }
+        DevAction::Stop { site } => {
+            daemon::call(layout, Request::StopApp { site })?;
+            println!("Stopped.");
+        }
+    }
+    Ok(())
+}
+
 /// Loads `meow.toml`, applies `change`, saves, and reloads a running
 /// MeowServer. The watcher would notice too; this makes it immediate.
 fn edit(layout: &Layout, change: impl FnOnce(&mut Config) -> Result<String>) -> Result<()> {

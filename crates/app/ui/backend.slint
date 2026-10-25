@@ -30,6 +30,12 @@ export struct SiteRow {
     need: string,
     need-install: string,
     need-install-label: string,
+    // A project that runs its own server: `Node.js 24`, whether it runs,
+    // and its output.
+    app: bool,
+    runtime: string,
+    app-running: bool,
+    app-log: string,
     source: string,
     framework: string,
     removable: bool,
@@ -185,6 +191,7 @@ export global Backend {
     callback remove-site(string);
     callback set-site-php(string, string);
     callback set-site-domain(string, int);
+    callback toggle-app(string, bool);
 
     callback select-kind(int);
     callback load-available();

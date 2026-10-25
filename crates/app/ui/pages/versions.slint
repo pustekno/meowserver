@@ -53,9 +53,20 @@ component KindList inherits VerticalLayout {
         }
     }
     Group {
+        text: @tr("Languages");
+    }
+    for i in [9, 11, 12]: NavItem {
+        label: Backend.kinds[i];
+        active: Backend.kind-index == i;
+        clicked => {
+            Backend.kind-index = i;
+            Backend.select-kind(i);
+        }
+    }
+    Group {
         text: @tr("Other");
     }
-    for i in [7, 8, 9]: NavItem {
+    for i in [7, 8]: NavItem {
         label: Backend.kinds[i];
         active: Backend.kind-index == i;
         clicked => {

@@ -23,6 +23,10 @@ impl Version {
         self.0[0]
     }
 
+    pub fn minor(&self) -> u32 {
+        self.0.get(1).copied().unwrap_or(0)
+    }
+
     /// True if `selector` (e.g. `8`, `8.4`, `8.4.27`) is a prefix of this version.
     pub fn matches(&self, selector: &str) -> bool {
         match selector.parse::<Version>() {

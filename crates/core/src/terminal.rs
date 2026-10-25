@@ -3,7 +3,7 @@
 // Additional terms under GPLv3 section 7(b) apply; see NOTICE.
 
 //! A terminal whose `PATH` starts with the active versions, so `php`,
-//! `composer`, `mysql`, and `node` are MeowServer's (PRD F29).
+//! `composer`, `mysql`, `node`, `python`, and `go` are MeowServer's (PRD F29).
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -22,6 +22,8 @@ pub fn bin_dirs(layout: &Layout, config: &Config) -> Result<Vec<PathBuf>> {
     for kind in [
         Kind::Php,
         Kind::Node,
+        Kind::Python,
+        Kind::Go,
         Kind::Mysql,
         Kind::Mariadb,
         Kind::Postgres,
@@ -32,6 +34,10 @@ pub fn bin_dirs(layout: &Layout, config: &Config) -> Result<Vec<PathBuf>> {
         let Some(installed) = service::select(layout, kind, config.version_selector(kind.id())) else {
             continue;
         };
+        if matches!(kind, Kind::Python | Kind::Go) {
+            dirs.extend(crate::app::bin_dirs(kind, &installed));
+            continue;
+        }
         let bin = installed.dir.join("bin");
         // Node on macOS/Linux and the databases keep executables in bin/.
         dirs.push(if bin.is_dir() { bin } else { installed.dir });

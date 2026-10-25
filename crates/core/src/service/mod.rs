@@ -22,7 +22,7 @@ use serde::{Deserialize, Serialize};
 use crate::layout::Layout;
 use crate::version::{self, Version};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Kind {
     Caddy,
@@ -36,10 +36,12 @@ pub enum Kind {
     Mailpit,
     Node,
     Composer,
+    Python,
+    Go,
 }
 
 impl Kind {
-    pub const ALL: [Kind; 11] = [
+    pub const ALL: [Kind; 13] = [
         Kind::Caddy,
         Kind::Nginx,
         Kind::Apache,
@@ -51,6 +53,8 @@ impl Kind {
         Kind::Mailpit,
         Kind::Node,
         Kind::Composer,
+        Kind::Python,
+        Kind::Go,
     ];
 
     pub fn id(self) -> &'static str {
@@ -66,6 +70,8 @@ impl Kind {
             Kind::Mailpit => "mailpit",
             Kind::Node => "node",
             Kind::Composer => "composer",
+            Kind::Python => "python",
+            Kind::Go => "go",
         }
     }
 

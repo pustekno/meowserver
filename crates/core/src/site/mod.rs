@@ -39,6 +39,13 @@ pub struct Site {
     /// `php` was chosen from `composer.json`, not set by the user.
     #[serde(default)]
     pub php_auto: bool,
+    /// A project that runs its own server (PRD F43): the runtime line it
+    /// uses (`None` when no installed version fits) and the port MeowServer
+    /// gives it; `proxy` then points at that port.
+    #[serde(default)]
+    pub runtime: Option<String>,
+    #[serde(default)]
+    pub app_port: Option<u16>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -80,6 +87,8 @@ pub fn discover(layout: &Layout, config: &Config) -> Discovery {
                 force_https: settings.force_https,
                 needs: needs::Needs::default(),
                 php_auto: false,
+                runtime: None,
+                app_port: None,
             });
         } else if let Some(path) = &settings.path {
             if !path.is_dir() {
@@ -97,11 +106,39 @@ pub fn discover(layout: &Layout, config: &Config) -> Discovery {
     }
 
     out.sites.sort_by(|a, b| a.name.cmp(&b.name));
+    give_app_ports(config, &mut out.sites);
     out
+}
+
+/// Every project that runs its own server gets a port for it, and its
+/// name forwards there (PRD F43). A port saved in `sites.<name>.port`
+/// (written the first time the server starts) stays; the others are
+/// handed out from 3000 in name order, skipping ports in use.
+fn give_app_ports(config: &Config, sites: &mut [Site]) {
+    let mut taken: Vec<u16> = config.sites.values().filter_map(|s| s.port).collect();
+    taken.extend(
+        config.sites.values().filter_map(|s| s.proxy.as_deref()?.rsplit(':').next()?.parse::<u16>().ok()),
+    );
+    let mut next = 3000u16;
+    for site in sites.iter_mut().filter(|s| s.framework.runtime().is_some()) {
+        let port = match site.app_port {
+            Some(p) => p,
+            None => {
+                while taken.contains(&next) {
+                    next += 1;
+                }
+                taken.push(next);
+                next
+            }
+        };
+        site.app_port = Some(port);
+        site.proxy = Some(format!("http://127.0.0.1:{port}"));
+    }
 }
 
 /// The PHP lines a site can be given automatically.
 struct PhpChoice {
+    layout: Layout,
     default: Option<String>,
     /// Installed lines, newest first.
     installed: Vec<String>,
@@ -115,7 +152,7 @@ impl PhpChoice {
         installed.dedup();
         let default = crate::service::select(layout, Kind::Php, config.version_selector("php"))
             .map(|i| i.version.line());
-        Self { default, installed }
+        Self { layout: layout.clone(), default, installed }
     }
 
     /// For a site without its own setting: the newest installed line the
@@ -180,8 +217,9 @@ fn push_folder(
         Some(root) => path.join(root),
         None => detected_root,
     };
-    let needs = needs::read(path);
-    let auto = if settings.php.is_none() { php.pick(&needs) } else { None };
+    let needs = needs::read(path, framework);
+    let auto = if settings.php.is_none() && framework.runtime().is_none() { php.pick(&needs) } else { None };
+    let runtime = needs.runtime.as_ref().and_then(|r| needs::pick_runtime(&php.layout, r));
     out.sites.push(Site {
         name: slug.to_owned(),
         host: format!("{slug}.{}", settings.suffix.unwrap_or(config.general.suffix).as_str()),
@@ -194,6 +232,8 @@ fn push_folder(
         proxy: None,
         force_https: settings.force_https,
         needs,
+        runtime,
+        app_port: settings.port,
     });
 }
 

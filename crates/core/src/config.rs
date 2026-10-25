@@ -130,6 +130,9 @@ pub struct SiteSettings {
     /// Domain ending for this site when not `general.suffix`: `.test` for
     /// projects brought from Laragon, whose settings and data name it.
     pub suffix: Option<Suffix>,
+    /// Port of the project's own development server (PRD F43), kept once
+    /// it has started so the project's settings can rely on it.
+    pub port: Option<u16>,
 }
 
 impl Default for Config {

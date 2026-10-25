@@ -138,6 +138,11 @@ enum Cmd {
     },
     /// Share a site on the internet through cloudflared or ngrok (installed by you).
     Share { site: String },
+    /// Start or stop the development server of a Node, Python, or Go project.
+    Dev {
+        #[command(subcommand)]
+        action: sites::DevAction,
+    },
     /// Turn Xdebug on (downloads it for each Windows PHP version) or off.
     Xdebug { state: system::OnOff },
     /// Local HTTPS: trust or untrust MeowServer's certificate authority.
@@ -231,6 +236,7 @@ fn run(cli: Cli) -> Result<()> {
         Cmd::Ssl { action } => system::ssl(&layout, action),
         Cmd::Db { action } => system::db(&layout, action),
         Cmd::Share { site } => system::share(&layout, &site),
+        Cmd::Dev { action } => sites::dev(&layout, action),
         Cmd::Xdebug { state } => system::xdebug(&layout, state),
         Cmd::Login { state } => system::login(&layout, state),
         Cmd::UndoSystemChanges => system::undo(&layout),

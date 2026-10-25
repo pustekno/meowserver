@@ -36,6 +36,13 @@ pub enum Request {
     },
     /// Re-read `meow.toml` and the project folders, then apply changes.
     Reload,
+    /// Start or stop a project's own development server (PRD F43).
+    StartApp {
+        site: String,
+    },
+    StopApp {
+        site: String,
+    },
     /// Stop all services and exit `meowd`.
     Shutdown,
 }

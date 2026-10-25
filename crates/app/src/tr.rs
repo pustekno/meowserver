@@ -66,6 +66,9 @@ pub fn t(text: &str) -> String {
         }
         "Stopping {}'s database…" => "Menghentikan database {}…",
         "Imported." => "Selesai diimpor.",
+        "Started. The first start of a project can take a while; see its Log." => {
+            "Dijalankan. Start pertama sebuah proyek bisa agak lama; lihat Log-nya."
+        }
         "copy {} ({}) to {}, as {}" => "salin {} ({}) ke {}, sebagai {}",
         "serve {} where it is, as {}" => "layani {} di tempatnya, sebagai {}",
         "make PHP {} the default" => "jadikan PHP {} sebagai default",
@@ -77,6 +80,9 @@ pub fn t(text: &str) -> String {
         "Copying projects and databases" => "Menyalin proyek dan database",
         "Needs PHP {}, but would run on PHP {}." => "Butuh PHP {}, tapi akan jalan di PHP {}.",
         "Install PHP {}" => "Pasang PHP {}",
+        "Runs on {}, which is not installed." => "Berjalan dengan {}, yang belum terpasang.",
+        "Needs {} {}; no installed version fits." => "Butuh {} {}; belum ada versi terpasang yang cocok.",
+        "Install {} {}" => "Pasang {} {}",
         "Needs PHP {}; no PHP is installed." => "Butuh PHP {}; belum ada PHP yang terpasang.",
         "Uses {}, which is not installed." => "Memakai {}, yang belum terpasang.",
         "Install {}" => "Pasang {}",

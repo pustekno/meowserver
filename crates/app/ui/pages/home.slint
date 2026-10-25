@@ -99,10 +99,12 @@ export component HomePage inherits VerticalLayout {
                         width: 90px;
                         color: Theme.muted;
                     }
+                    // Every port it listens on (`:80, :443`), like Laragon.
                     Text {
                         text: s.port;
                         vertical-alignment: center;
-                        width: 70px;
+                        width: 210px;
+                        overflow: elide;
                         color: Theme.muted;
                     }
                     Text {

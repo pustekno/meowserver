@@ -74,7 +74,7 @@ impl Pool {
 impl Plan {
     /// The pool serving a site, or `None` if it does not run PHP.
     pub fn pool_for(&self, site: &Site) -> Option<&Pool> {
-        if matches!(site.framework, Framework::Proxy | Framework::Static) {
+        if site.proxy.is_some() || matches!(site.framework, Framework::Proxy | Framework::Static) {
             return None;
         }
         let index = self.site_pool.get(&site.name).copied().or(self.default_pool)?;
@@ -149,6 +149,18 @@ pub fn scan_dirs(layout: &Layout, installed: &Installed) -> Result<OsString> {
     let custom_line = custom.join(installed.version.line());
     std::fs::create_dir_all(&custom_line)?;
     Ok(std::env::join_paths([&custom, &custom_line])?)
+}
+
+/// The FastCGI ports a PHP version listens on, first and last, worked out
+/// without planning anything (for showing them).
+pub fn ports(config: &Config, version: &Version) -> Option<(u16, u16)> {
+    let base = base_port(config.port("php", DEFAULT_PORT_BASE), version).ok()?;
+    let count = if os() == Os::Windows {
+        u16::from(config.php.pool_size.clamp(1, PORTS_PER_VERSION as u8))
+    } else {
+        1
+    };
+    Some((base, base + count - 1))
 }
 
 fn build_pool(layout: &Layout, config: &Config, installed: Installed, base: u16) -> Result<Pool> {

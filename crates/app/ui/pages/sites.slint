@@ -11,100 +11,110 @@ import { Card, Link, PageHeader, Theme } from "../widgets.slint";
 
 component SiteItem inherits Rectangle {
     in property <SiteRow> site;
-    min-height: 56px;
+    // A project with its own server has a folder too; a plain proxy has not.
+    property <bool> has-folder: !root.site.proxy || root.site.app;
     border-radius: 6px;
     background: hover.has-hover ? Theme.card : transparent;
     hover := TouchArea { }
-    HorizontalLayout {
+    // Two lines, so the controls never push the list wider than the page:
+    // name and what it is above, folder and controls below.
+    VerticalLayout {
         padding: 8px;
-        spacing: 12px;
-        VerticalLayout {
-            horizontal-stretch: 1;
-            alignment: center;
+        spacing: 4px;
+        HorizontalLayout {
+            spacing: 12px;
             Link {
                 text: root.site.url;
                 font-weight: 600;
+                horizontal-stretch: 1;
                 clicked => {
                     Backend.open-url(root.site.url);
                 }
             }
             Text {
+                text: root.site.app && root.site.runtime != "" ? (root.site.framework == "" ? root.site.runtime : root.site.framework + " · " + root.site.runtime) : root.site.framework;
+                vertical-alignment: center;
+                color: Theme.muted;
+            }
+        }
+        HorizontalLayout {
+            spacing: 8px;
+            Text {
                 text: root.site.folder;
                 color: Theme.muted;
                 overflow: elide;
+                vertical-alignment: center;
+                horizontal-stretch: 1;
+                min-width: 80px;
             }
-            if root.site.need != "": HorizontalLayout {
-                spacing: 8px;
-                Text {
-                    text: root.site.need;
-                    color: Theme.accent;
-                    wrap: word-wrap;
-                    vertical-alignment: center;
-                    horizontal-stretch: 1;
-                }
-                if root.site.need-install != "": Button {
-                    text: root.site.need-install-label;
-                    enabled: !Backend.busy;
-                    clicked => {
-                        Backend.install-service(root.site.need-install);
-                    }
+            if root.site.app: Button {
+                text: root.site.app-running ? @tr("Stop") : @tr("Start");
+                primary: !root.site.app-running;
+                enabled: !Backend.busy && root.site.runtime != "";
+                clicked => {
+                    Backend.toggle-app(root.site.name, !root.site.app-running);
                 }
             }
-        }
-        Text {
-            text: root.site.framework;
-            vertical-alignment: center;
-            color: Theme.muted;
-            width: 90px;
-        }
-        if !root.site.proxy: ComboBox {
-            width: 110px;
-            y: (parent.height - self.height) / 2;
-            model: Backend.php-choices;
-            current-index: root.site.php-index;
-            accessible-label: @tr("PHP version for {}", root.site.name);
-            selected(value) => {
-                Backend.set-site-php(root.site.name, value);
+            if root.site.app: Button {
+                text: @tr("Log");
+                clicked => {
+                    Backend.open-path(root.site.app-log);
+                }
+            }
+            if !root.site.proxy: ComboBox {
+                width: 100px;
+                model: Backend.php-choices;
+                current-index: root.site.php-index;
+                accessible-label: @tr("PHP version for {}", root.site.name);
+                selected(value) => {
+                    Backend.set-site-php(root.site.name, value);
+                }
+            }
+            ComboBox {
+                width: 110px;
+                model: [".localhost", ".test"];
+                current-index: root.site.domain-index;
+                accessible-label: @tr("Domain ending for {}", root.site.name);
+                selected(value) => {
+                    Backend.set-site-domain(root.site.name, self.current-index);
+                }
+            }
+            Button {
+                text: @tr("Folder");
+                enabled: root.has-folder;
+                clicked => {
+                    Backend.open-path(root.site.folder);
+                }
+            }
+            Button {
+                text: @tr("Terminal");
+                enabled: root.has-folder;
+                clicked => {
+                    Backend.open-terminal(root.site.folder);
+                }
+            }
+            if root.site.removable: Button {
+                text: @tr("Remove");
+                clicked => {
+                    Backend.remove-site(root.site.name);
+                }
             }
         }
-        ComboBox {
-            width: 110px;
-            y: (parent.height - self.height) / 2;
-            model: [".localhost", ".test"];
-            current-index: root.site.domain-index;
-            accessible-label: @tr("Domain ending for {}", root.site.name);
-            selected(value) => {
-                Backend.set-site-domain(root.site.name, self.current-index);
+        if root.site.need != "": HorizontalLayout {
+            spacing: 8px;
+            Text {
+                text: root.site.need;
+                color: Theme.accent;
+                wrap: word-wrap;
+                vertical-alignment: center;
+                horizontal-stretch: 1;
             }
-        }
-        if root.site.proxy: Text {
-            text: @tr("proxy");
-            width: 110px;
-            vertical-alignment: center;
-            color: Theme.muted;
-        }
-        Button {
-            text: @tr("Folder");
-            enabled: !root.site.proxy;
-            y: (parent.height - self.height) / 2;
-            clicked => {
-                Backend.open-path(root.site.folder);
-            }
-        }
-        Button {
-            text: @tr("Terminal");
-            enabled: !root.site.proxy;
-            y: (parent.height - self.height) / 2;
-            clicked => {
-                Backend.open-terminal(root.site.folder);
-            }
-        }
-        Button {
-            text: @tr("Remove");
-            enabled: root.site.removable;
-            y: (parent.height - self.height) / 2;
-            clicked => {
-                Backend.remove-site(root.site.name);
+            if root.site.need-install != "": Button {
+                text: root.site.need-install-label;
+                enabled: !Backend.busy;
+                clicked => {
+                    Backend.install-service(root.site.need-install);
+                }
             }
         }
     }

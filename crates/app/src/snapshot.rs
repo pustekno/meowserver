@@ -8,9 +8,10 @@ use meow_core::config::{Config, Suffix, WebServer};
 use meow_core::engine::Status;
 use meow_core::ipc::{Client, Request};
 use meow_core::layout::Layout;
-use meow_core::service::{self, Kind, Unit, datadir, mailpit, mysql, postgres, redis, web};
+use meow_core::service::{self, Kind, Unit, datadir, mailpit, mysql, php, postgres, redis, web};
 use meow_core::site::{self, Framework, Site, Source};
 use meow_core::supervisor::State;
+use meow_core::version::Version;
 
 use crate::tr::t;
 
@@ -40,6 +41,18 @@ pub fn need(problem: &site::needs::Problem) -> (String, String, String) {
             format!("php {suggest}"),
             fill("Install PHP {}", &[suggest]),
         ),
+        Problem::Runtime { kind, constraint, suggest } => {
+            let name = site::needs::runtime_name(*kind);
+            (
+                if constraint.is_empty() {
+                    fill("Runs on {}, which is not installed.", &[name])
+                } else {
+                    fill("Needs {} {}; no installed version fits.", &[name, constraint])
+                },
+                format!("{} {suggest}", kind.id()),
+                fill("Install {} {}", &[name, suggest]),
+            )
+        }
         Problem::DatabaseMissing { family } => (
             fill("Uses {}, which is not installed.", &[family.name()]),
             family.kinds()[0].id().to_owned(),
@@ -82,6 +95,8 @@ pub struct Snapshot {
     pub any_running: bool,
     pub services: Vec<ServiceInfo>,
     pub sites: Vec<Site>,
+    /// Sites whose own development server is running (PRD F43).
+    pub apps_running: Vec<String>,
     pub php_lines: Vec<String>,
     pub databases: Vec<DbInfo>,
     pub needs_setup: bool,
@@ -99,6 +114,12 @@ pub fn take(layout: &Layout) -> Snapshot {
     let status =
         status.unwrap_or(Status { units: vec![], processes: vec![], sites: vec![], warnings: vec![] });
     let sites = if daemon_up { status.sites.clone() } else { site::discover(layout, &config).sites };
+    let apps_running: Vec<String> = status
+        .processes
+        .iter()
+        .filter(|p| matches!(p.state, State::Running { .. } | State::Starting))
+        .filter_map(|p| p.id.strip_prefix("app-").map(str::to_owned))
+        .collect();
 
     let web_kind = web::kind(&config);
     let state_of = |unit: Unit| -> (String, bool, bool) {
@@ -119,19 +140,66 @@ pub fn take(layout: &Layout) -> Snapshot {
         |kind: Kind| service::select(layout, kind, config.version_selector(kind.id())).map(|i| i.version);
 
     let mut services = Vec::new();
-    let rows: [(Unit, Kind, String, Option<u16>); 7] = [
-        (Unit::Web, web_kind, title(web_kind).into(), Some(config.port("web", 80))),
-        (Unit::Php, Kind::Php, "PHP".into(), None),
-        (Unit::Mysql, Kind::Mysql, "MySQL".into(), Some(config.port("mysql", mysql::DEFAULT_PORT))),
-        (Unit::Mariadb, Kind::Mariadb, "MariaDB".into(), Some(config.port("mariadb", mysql::DEFAULT_PORT))),
+    // Every port a service listens on, as Laragon shows them.
+    let web = {
+        let http = config.port("web", 80);
+        if config.general.https {
+            format!(":{http}, :{}", config.tls_port("web", 443))
+        } else {
+            format!(":{http}")
+        }
+    };
+    let php = {
+        // The versions running, else the default one.
+        let mut versions: Vec<Version> = status
+            .processes
+            .iter()
+            .filter_map(|p| p.id.strip_prefix("php-")?.split('#').next()?.parse().ok())
+            .collect();
+        versions.sort();
+        versions.dedup();
+        if versions.is_empty() {
+            versions.extend(active(Kind::Php));
+        }
+        let ranges: Vec<String> = versions
+            .iter()
+            .filter_map(|v| {
+                let (first, last) = php::ports(&config, v)?;
+                let span = if first == last { format!(":{first}") } else { format!(":{first}–{last}") };
+                Some(if versions.len() > 1 { format!("{} {span}", v.line()) } else { span })
+            })
+            .collect();
+        ranges.join(", ")
+    };
+    let database = |kind: Kind| {
+        let mut text = format!(":{}", config.port(kind.id(), mysql::DEFAULT_PORT));
+        for (line, port) in config.services.get(kind.id()).map(|s| s.extra.clone()).unwrap_or_default() {
+            text.push_str(&format!(", {line} :{port}"));
+        }
+        text
+    };
+    let rows: [(Unit, Kind, String, String); 7] = [
+        (Unit::Web, web_kind, title(web_kind).into(), web),
+        (Unit::Php, Kind::Php, "PHP".into(), php),
+        (Unit::Mysql, Kind::Mysql, "MySQL".into(), database(Kind::Mysql)),
+        (Unit::Mariadb, Kind::Mariadb, "MariaDB".into(), database(Kind::Mariadb)),
         (
             Unit::Postgres,
             Kind::Postgres,
             "PostgreSQL".into(),
-            Some(config.port("postgres", postgres::DEFAULT_PORT)),
+            format!(":{}", config.port("postgres", postgres::DEFAULT_PORT)),
         ),
-        (Unit::Redis, Kind::Redis, "Redis".into(), Some(config.port("redis", redis::DEFAULT_PORT))),
-        (Unit::Mailpit, Kind::Mailpit, "Mailpit".into(), Some(config.web_port("mailpit", mailpit::WEB_PORT))),
+        (Unit::Redis, Kind::Redis, "Redis".into(), format!(":{}", config.port("redis", redis::DEFAULT_PORT))),
+        (
+            Unit::Mailpit,
+            Kind::Mailpit,
+            "Mailpit".into(),
+            format!(
+                ":{} SMTP, :{} web",
+                config.port("mailpit", mailpit::SMTP_PORT),
+                config.web_port("mailpit", mailpit::WEB_PORT)
+            ),
+        ),
     ];
     for (unit, kind, name, port) in rows {
         let version = active(kind).map(|v| v.to_string());
@@ -140,15 +208,7 @@ pub fn take(layout: &Layout) -> Snapshot {
             continue;
         }
         let (state, running, failed) = state_of(unit);
-        services.push(ServiceInfo {
-            unit,
-            name,
-            version,
-            port: port.map(|p| format!(":{p}")).unwrap_or_default(),
-            state,
-            running,
-            failed,
-        });
+        services.push(ServiceInfo { unit, name, version, port, state, running, failed });
     }
 
     let mut php_lines: Vec<String> =
@@ -216,6 +276,7 @@ pub fn take(layout: &Layout) -> Snapshot {
     let localhost_url =
         if port == 80 { "http://localhost/".into() } else { format!("http://localhost:{port}/") };
     Snapshot {
+        apps_running,
         headline,
         any_running: !running_names.is_empty(),
         needs_setup: active(web_kind).is_none() || active(Kind::Php).is_none(),
@@ -241,6 +302,8 @@ pub fn title(kind: Kind) -> &'static str {
         Kind::Mailpit => "Mailpit",
         Kind::Node => "Node.js",
         Kind::Composer => "Composer",
+        Kind::Python => "Python",
+        Kind::Go => "Go",
     }
 }
 
@@ -256,6 +319,14 @@ pub fn framework(f: Framework) -> &'static str {
         Framework::Php => "PHP",
         Framework::Static => "Static",
         Framework::Proxy => "Proxy",
+        Framework::Next => "Next.js",
+        Framework::Nuxt => "Nuxt",
+        Framework::Vite => "Vite",
+        Framework::Node => "Node.js",
+        Framework::Django => "Django",
+        Framework::Flask => "Flask",
+        Framework::FastApi => "FastAPI",
+        Framework::Go => "Go",
     }
 }
 

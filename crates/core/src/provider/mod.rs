@@ -8,12 +8,14 @@
 mod apache;
 mod composer;
 mod github;
+mod go;
 mod mariadb;
 mod mysql;
 mod nginx;
 mod node;
 mod php;
 mod postgres;
+mod python;
 pub mod xdebug;
 
 use anyhow::{Context, Result};
@@ -92,6 +94,8 @@ pub fn for_service(kind: Kind) -> Option<Box<dyn Provider>> {
         Kind::Mailpit => Box::new(github::mailpit()),
         Kind::Node => Box::new(node::Dist),
         Kind::Composer => Box::new(composer::Phar),
+        Kind::Python => Box::new(python::Standalone),
+        Kind::Go => Box::new(go::Dl),
         _ => return None,
     })
 }

@@ -68,6 +68,8 @@ impl Engine {
             Request::Stop { unit } => done(parse_unit(&unit).map(|u| self.stop(u))),
             Request::Restart { unit } => done(parse_unit(&unit).and_then(|u| self.restart(u))),
             Request::Reload => done(self.reload()),
+            Request::StartApp { site } => done(self.start_app(&site)),
+            Request::StopApp { site } => done(self.stop_app(&site)),
             Request::Shutdown => unreachable!("handled by meowd"),
         };
         match result {
@@ -123,6 +125,35 @@ impl Engine {
             self.stop_unit(&mut state, unit);
         }
         self.start(&[unit])
+    }
+
+    /// Starts a project's development server on the port its site name
+    /// forwards to (PRD F43). That port is saved the first time, so the
+    /// project's own settings can name it.
+    pub fn start_app(&self, name: &str) -> Result<()> {
+        let _state = self.state.lock().unwrap();
+        let mut config = Config::load(&self.layout)?;
+        let site = site::discover(&self.layout, &config)
+            .sites
+            .into_iter()
+            .find(|s| s.name == name)
+            .ok_or_else(|| anyhow!("no site named {name}"))?;
+        let port = site.app_port.ok_or_else(|| anyhow!("{name} does not run its own server"))?;
+        let spec = crate::app::plan(&self.layout, &config, &site)?;
+        if self.supervisor.is_running(&spec.id) {
+            return Ok(());
+        }
+        self.ensure_port_free(&format!("{name}'s dev server"), port)?;
+        if config.sites.get(name).and_then(|s| s.port).is_none() {
+            site::manage::settings(&mut config, name).port = Some(port);
+            config.save(&self.layout)?;
+        }
+        self.supervisor.start(spec)
+    }
+
+    pub fn stop_app(&self, name: &str) -> Result<()> {
+        let id = crate::app::process_id(name);
+        if self.supervisor.is_running(&id) { self.supervisor.stop(&id) } else { Ok(()) }
     }
 
     pub fn stop_all(&self) {

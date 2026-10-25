@@ -169,8 +169,6 @@ msgstr "Kode sumber"
 msgid "PHP version for {}"
 msgstr "Versi PHP untuk {}"
 
-msgid "proxy"
-msgstr "proxy"
 
 msgid "Folder"
 msgstr "Folder"
@@ -344,3 +342,10 @@ msgstr "Jalankan juga"
 
 msgid "Domain ending for {}"
 msgstr "Akhiran domain untuk {}"
+
+msgid "Log"
+msgstr "Log"
+
+msgid "Languages"
+msgstr "Bahasa pemrograman"
+
