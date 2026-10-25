@@ -31,13 +31,21 @@ No ads. No telemetry. No account.
 
 ## Quick start (Windows)
 
-1. Unzip `MeowServer-<version>-windows-x86_64.zip` anywhere, e.g.
-   `D:\MeowServer`.
-2. Run `meowserver.exe`. On the Home page choose **Install recommended
+1. Run `MeowServer-<version>-windows-x86_64-setup.exe`. It installs for
+   your user only (no administrator rights) into `C:\MeowServer`, or a
+   folder you choose. Prefer no installer? Unzip
+   `MeowServer-<version>-windows-x86_64.zip` anywhere instead.
+2. Start MeowServer. On the Home page choose **Install recommended
    stack** (Caddy, PHP, MySQL 8.4), or import from Laragon, XAMPP,
    WampServer, or FlyEnv when one is found.
 3. Put a project in `www\`, or use **Sites → Add project**. Open
    `http://<name>.localhost`.
+
+**Updating:** run the newer setup. It finds your MeowServer folder, quits
+MeowServer, and replaces only the program files; your projects (`www`),
+databases (`data`), settings, and downloaded versions (`bin`) are kept. A
+portable folder updates the same way: choose it as the install folder.
+Uninstalling also keeps them; delete the folder yourself when you are done.
 
 The same from a terminal:
 

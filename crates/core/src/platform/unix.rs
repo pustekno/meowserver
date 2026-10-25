@@ -84,6 +84,11 @@ pub fn process_path(pid: u32) -> Option<String> {
     (!name.is_empty()).then_some(name)
 }
 
+/// Asks a process to end (`SIGTERM`).
+pub fn terminate(pid: u32) {
+    unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) };
+}
+
 /// (pid, executable file name) of every running process.
 pub fn process_names() -> Vec<(u32, String)> {
     let Ok(out) = Command::new("ps").args(["-A", "-o", "pid=,comm="]).output() else { return Vec::new() };

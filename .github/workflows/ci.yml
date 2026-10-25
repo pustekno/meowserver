@@ -43,6 +43,35 @@ jobs:
           exit $status
       - run: cargo build --workspace --release
 
+  package-windows:
+    name: Windows installer and zip
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Inno Setup 6.7.3 (checksum verified)
+        shell: pwsh
+        run: |
+          $exe = "$env:RUNNER_TEMP\innosetup.exe"
+          Invoke-WebRequest https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe -OutFile $exe
+          $hash = (Get-FileHash $exe -Algorithm SHA256).Hash
+          if ($hash -ne "9C73C3BAE7ED48D44112A0F48E66742C00090BDB5BEF71D9D3C056C66E97B732") { throw "checksum mismatch: $hash" }
+          Start-Process $exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/CURRENTUSER','/NORESTART','/NOICONS' -Wait
+      - name: cargo xtask dist
+        shell: pwsh
+        run: |
+          cargo xtask dist
+          if (-not (Test-Path dist/*-setup.exe)) { throw "the installer was not built" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MeowServer-windows
+          path: |
+            dist/*-setup.exe
+            dist/*.zip
+          if-no-files-found: error
+
   dco:
     name: commits are signed off (DCO)
     if: github.event_name == 'pull_request'

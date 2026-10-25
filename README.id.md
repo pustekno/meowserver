@@ -31,13 +31,22 @@ Tanpa iklan. Tanpa telemetri. Tanpa akun.
 
 ## Mulai cepat (Windows)
 
-1. Ekstrak `MeowServer-<versi>-windows-x86_64.zip` ke mana saja, mis.
-   `D:\MeowServer`.
-2. Jalankan `meowserver.exe`. Di Beranda pilih **Pasang paket yang
+1. Jalankan `MeowServer-<versi>-windows-x86_64-setup.exe`. Terpasang
+   untuk user kamu saja (tanpa hak admin) ke `C:\MeowServer`, atau folder
+   pilihanmu. Tidak mau pakai installer? Ekstrak
+   `MeowServer-<versi>-windows-x86_64.zip` ke mana saja.
+2. Jalankan MeowServer. Di Beranda pilih **Pasang paket yang
    disarankan** (Caddy, PHP, MySQL 8.4), atau impor dari Laragon, XAMPP,
    WampServer, atau FlyEnv jika ditemukan.
 3. Taruh proyek di `www\`, atau pakai **Situs → Tambah proyek**. Buka
    `http://<nama>.localhost`.
+
+**Memperbarui:** jalankan setup versi baru. Setup menemukan folder
+MeowServer kamu, menutup MeowServer, lalu hanya mengganti file program;
+proyek (`www`), database (`data`), pengaturan, dan versi yang sudah
+diunduh (`bin`) tetap ada. Folder portable diperbarui dengan cara yang
+sama: pilih folder itu sebagai folder instalasi. Uninstall juga tidak
+menghapusnya; hapus foldernya sendiri kalau sudah tidak dipakai.
 
 Lewat terminal:
 

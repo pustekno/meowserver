@@ -82,6 +82,25 @@ pub fn processes_under(root: &str, stems: &[&str]) -> bool {
     })
 }
 
+/// Ends every process started from exactly `exe`, such as the window of one
+/// MeowServer folder; copies in other folders are left alone. Returns how
+/// many were ended.
+pub fn end_program(exe: &std::path::Path) -> usize {
+    let Some(name) = exe.file_name().map(|n| n.to_string_lossy().to_lowercase()) else { return 0 };
+    let wanted = exe.to_string_lossy().to_lowercase();
+    let mut ended = 0;
+    for (pid, process) in imp::process_names() {
+        if process.to_lowercase() == name
+            && imp::process_path(pid).is_some_and(|p| p.to_lowercase() == wanted)
+            && pid != std::process::id()
+        {
+            imp::terminate(pid);
+            ended += 1;
+        }
+    }
+    ended
+}
+
 /// Runs a command with administrator rights after the OS prompt (UAC or a
 /// password dialog) and returns its exit code. Fails if the user declines.
 pub fn run_elevated(program: &std::path::Path, args: &[String]) -> std::io::Result<i32> {

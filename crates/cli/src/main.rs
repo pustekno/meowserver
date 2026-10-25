@@ -39,7 +39,7 @@ enum Cmd {
     },
     /// Stop all services. MeowServer itself keeps running.
     Down,
-    /// Stop all services and exit MeowServer.
+    /// Stop all services, close the window, and exit MeowServer.
     Quit,
     /// Start one service: web, php, mysql, mariadb, postgres, redis, mailpit.
     Start { service: String },

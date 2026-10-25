@@ -9,6 +9,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Result, bail};
 use meow_core::ipc::{Client, Request};
 use meow_core::layout::Layout;
+use meow_core::platform;
 
 use crate::print;
 
@@ -25,8 +26,12 @@ pub fn reload_if_running(layout: &Layout) -> Result<()> {
     }
 }
 
-/// Asks `meowd` to stop everything and exit, and waits until it has.
+/// Closes this folder's window, asks `meowd` to stop everything and exit,
+/// and waits until it has. The installer relies on this before replacing
+/// or removing the program files.
 pub fn quit(layout: &Layout) -> Result<()> {
+    // The window first, so it cannot start `meowd` again.
+    platform::end_program(&layout.root().join(format!("meowserver{}", platform::EXE_SUFFIX)));
     let Ok(mut client) = Client::connect(layout) else { return Ok(()) };
     // meowd may close the pipe as it exits; that is the expected outcome.
     let _ = client.call(Request::Shutdown);

@@ -28,8 +28,10 @@ pub fn set_login_item(layout: &Layout, enabled: bool) -> Result<()> {
                 // next to itself, which is the portable layout.
                 let value = format!("\"{}\"", meowd.display());
                 run("reg", &["add", RUN_KEY, "/v", LOGIN_NAME, "/t", "REG_SZ", "/d", &value, "/f"])
+            } else if login_item_here(layout) {
+                run("reg", &["delete", RUN_KEY, "/v", LOGIN_NAME, "/f"])
             } else {
-                run("reg", &["delete", RUN_KEY, "/v", LOGIN_NAME, "/f"]) || !login_item_enabled()
+                true
             };
             if !ok {
                 bail!("could not change the login item");
@@ -40,7 +42,7 @@ pub fn set_login_item(layout: &Layout, enabled: bool) -> Result<()> {
             if enabled {
                 std::fs::create_dir_all(plist.parent().unwrap())?;
                 std::fs::write(&plist, launch_agent(&meowd, layout.root()))?;
-            } else {
+            } else if login_item_here(layout) {
                 let _ = std::fs::remove_file(&plist);
             }
         }
@@ -54,7 +56,7 @@ pub fn set_login_item(layout: &Layout, enabled: bool) -> Result<()> {
                     meowd.display()
                 );
                 std::fs::write(&desktop, body)?;
-            } else {
+            } else if login_item_here(layout) {
                 let _ = std::fs::remove_file(&desktop);
             }
         }
@@ -62,14 +64,29 @@ pub fn set_login_item(layout: &Layout, enabled: bool) -> Result<()> {
     Ok(())
 }
 
-pub fn login_item_enabled() -> bool {
-    match os() {
-        Os::Windows => run("reg", &["query", RUN_KEY, "/v", LOGIN_NAME]),
-        Os::MacOs => {
-            home().is_ok_and(|h| h.join("Library/LaunchAgents/id.pustekno.meowserver.plist").exists())
-        }
-        Os::Linux => home().is_ok_and(|h| h.join(".config/autostart/meowserver.desktop").exists()),
-    }
+/// True when the login item starts this folder's MeowServer. There is one
+/// login item per user, so another copy (a second folder, a test install)
+/// may own it; undoing or uninstalling this one must leave that alone.
+pub fn login_item_here(layout: &Layout) -> bool {
+    let registered = match os() {
+        Os::Windows => Command::new("reg")
+            .args(["query", RUN_KEY, "/v", LOGIN_NAME])
+            .stdin(Stdio::null())
+            .stderr(Stdio::null())
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).into_owned()),
+        Os::MacOs => home().ok().and_then(|h| {
+            std::fs::read_to_string(h.join("Library/LaunchAgents/id.pustekno.meowserver.plist")).ok()
+        }),
+        Os::Linux => home()
+            .ok()
+            .and_then(|h| std::fs::read_to_string(h.join(".config/autostart/meowserver.desktop")).ok()),
+    };
+    let meowd = layout.root().join(format!("meowd{}", crate::platform::EXE_SUFFIX));
+    let meowd = meowd.to_string_lossy().to_lowercase();
+    registered.is_some_and(|text| text.to_lowercase().contains(&meowd))
 }
 
 /// Removes everything MeowServer changed outside its folder: hosts entries,
@@ -106,7 +123,7 @@ pub fn undo(layout: &Layout, meow: &Path) -> Vec<String> {
             Err(_) => notes.push("Defender: not changed (administrator rights declined)".into()),
         }
     }
-    if login_item_enabled() {
+    if login_item_here(layout) {
         match set_login_item(layout, false) {
             Ok(()) => notes.push("login item: removed".into()),
             Err(e) => notes.push(format!("login item: {e:#}")),

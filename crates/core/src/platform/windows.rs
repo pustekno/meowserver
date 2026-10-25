@@ -242,6 +242,16 @@ pub fn process_path(pid: u32) -> Option<String> {
     (ok != 0).then(|| String::from_utf16_lossy(&buf[..len as usize]))
 }
 
+/// Ends a process at once. For programs that keep no unsaved state.
+pub fn terminate(pid: u32) {
+    use windows_sys::Win32::System::Threading::{OpenProcess, PROCESS_TERMINATE, TerminateProcess};
+    let handle = unsafe { OpenProcess(PROCESS_TERMINATE, 0, pid) };
+    if !handle.is_null() {
+        let handle = Handle(handle);
+        unsafe { TerminateProcess(handle.0, 1) };
+    }
+}
+
 /// (pid, executable file name) of every running process.
 pub fn process_names() -> Vec<(u32, String)> {
     use windows_sys::Win32::System::Diagnostics::ToolHelp::{

@@ -1133,6 +1133,8 @@ or another OS).
 | F19 LAN access | Built | F39 Defender exclusions | Built (needs UAC) |
 | F20 Xdebug | Tested (PHP 8.4, 7.4) | F40 dev-server ports | Tested |
 
+**Windows installer** (§15, `packaging/windows/`): tested. A scripted run installs per user, then updates to a newer build while MeowServer and its window are running, then uninstalls: projects, databases, downloads, and `etc/custom` are unchanged byte for byte, the PATH entry is added once and removed exactly, and the uninstaller undoes system changes. CI builds the installer and the zip on every push. Not signed yet, so SmartScreen warns on first run.
+
 Measured against §8.1 on the reference laptop: `meowd` 13.8 MB working set
 (2.6 MB private) and 0 ms CPU idle; window 38.5 MB working set (8.5 MB
 private), so `meowd` + window is about 52 MB working set against the 40 MB
@@ -1182,6 +1184,7 @@ directly:
 | 2026-10-25 | Owner request: MeowServer's own errors can be reported by the user as a pre-filled GitHub issue; developers' site errors stay local (F38). |
 | 2026-10-25 | Owner request after slow Laragon sites on interns' laptops: performance rules in §8.7, Defender exclusions (F39), dev-server ports (F40). Evidence in ADR 0007. |
 | 2026-10-25 | Owner request: import is not Laragon-only. F27 now detects XAMPP, WampServer, and FlyEnv too, and shows the plan before copying. |
+| 2026-10-25 | Owner request: a Windows installer for first install and updates that never deletes data. Inno Setup 6 (free for open source; the only build tool that is not Rust), per user without administrator rights, default `C:\MeowServer` because data lives next to the program; Program Files is refused. Updates replace only the program files; uninstall keeps `www`, `data`, `bin`, and settings. |
 
 No open questions remain for v1.0 scope. New questions are added here as they
 come up.
