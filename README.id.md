@@ -12,68 +12,131 @@ Tanpa iklan. Tanpa telemetri. Tanpa akun.
 > Windows 11. Build macOS dan Linux sudah bisa dikompilasi tapi belum
 > dijalankan. Lihat [`docs/PRD.md`](docs/PRD.md) §16.
 
-## Fitur
+## Unduh
 
-- Menjalankan **Caddy** (default), **Nginx**, atau **Apache** dengan **PHP**,
-  **MySQL**, **MariaDB**, **PostgreSQL**, **Redis**, dan **Mailpit**.
-- Beberapa versi PHP berdampingan, bisa dipilih per proyek. OPcache dengan
-  cache di disk, jadi halaman pertama setelah restart pun tetap cepat.
-- Setiap folder di `www/` jadi situs dalam waktu kurang dari sedetik. Proyek
-  di tempat lain (mis. `D:\projects\app`) ditambahkan dengan satu klik, tanpa
-  symlink atau junction.
-- HTTPS lokal dari satu CA yang hanya berlaku untuk `.localhost`, `.test`,
-  dan komputer ini.
-- Mengunduh layanan dari sumber resminya dan memverifikasi checksum.
-- Bisa mengimpor dari Laragon, XAMPP, WampServer, atau FlyEnv (terdeteksi otomatis), termasuk data MySQL/MariaDB.
-- Backup, restore, dan upgrade versi database dengan backup otomatis.
-- Ikon tray (±14 MB RAM) dan jendela native yang kecil. Tanpa Electron,
-  tanpa webview.
+Ambil `MeowServer-<versi>-windows-x86_64-setup.exe` (atau `.zip` portable)
+dari [halaman Releases](https://github.com/pustekno/meowserver/releases).
+Versi sebelum 1.0 ditandai sebagai pre-release.
+
+MeowServer belum ditandatangani (code signing), jadi Windows mungkin
+menampilkan "Windows protected your PC": pilih **More info → Run anyway**.
+Beberapa langkah yang mengubah Windows sendiri (entri hosts untuk `.test`,
+memercayai sertifikat HTTPS, pengecualian Defender) meminta hak
+administrator sekali dan menampilkan "Penerbit tidak diketahui" karena
+alasan yang sama.
 
 ## Mulai cepat (Windows)
 
-1. Jalankan `MeowServer-<versi>-windows-x86_64-setup.exe`. Terpasang
-   untuk user kamu saja (tanpa hak admin) ke `C:\MeowServer`, atau folder
-   pilihanmu. Tidak mau pakai installer? Ekstrak
-   `MeowServer-<versi>-windows-x86_64.zip` ke mana saja.
-   Setup menanyakan web server (Caddy, atau Nginx/Apache bila lebih suka)
-   dan database (MySQL 8.4, atau MariaDB/PostgreSQL), lalu mengunduhnya
-   bersama PHP dan Composer dari sumber resminya.
-2. Jalankan MeowServer; sudah siap. Jika Laragon, XAMPP, WampServer, atau
-   FlyEnv ditemukan, Beranda menampilkan apa yang akan diimpor. Versi zip,
-   atau setup yang dijalankan saat offline, menawarkan **Pasang paket yang
-   disarankan** di Beranda.
-3. Taruh proyek di `www\`, atau pakai **Situs → Tambah proyek**. Buka
+1. Jalankan setup. Terpasang untuk user kamu saja, tanpa hak admin, ke
+   `C:\MeowServer` atau folder pilihanmu. Setup menanyakan web server
+   (Caddy, atau Nginx/Apache bila lebih suka) dan database (MySQL 8.4
+   seperti Laragon, atau MariaDB/PostgreSQL), lalu mengunduhnya bersama PHP
+   dan Composer dari sumber resminya.
+2. Buka MeowServer; semuanya sudah siap dijalankan. Jika Laragon, XAMPP,
+   WampServer, atau FlyEnv ditemukan, Beranda menampilkan apa yang akan
+   diimpor, dan tidak ada yang disalin sebelum kamu menekan Impor.
+3. Taruh proyek di `www\`, atau pakai **Situs → Tambah proyek**, lalu buka
    `http://<nama>.localhost`.
 
-**Memperbarui:** jalankan setup versi baru. Setup menemukan folder
-MeowServer kamu, menutup MeowServer, lalu hanya mengganti file program;
-proyek (`www`), database (`data`), pengaturan, dan versi yang sudah
-diunduh (`bin`) tetap ada. Folder portable diperbarui dengan cara yang
-sama: pilih folder itu sebagai folder instalasi. Uninstall juga tidak
-menghapusnya; hapus foldernya sendiri kalau sudah tidak dipakai.
+Versi zip portable, atau setup yang dijalankan saat offline, menawarkan
+**Pasang paket yang disarankan** di Beranda.
 
-Lewat terminal:
+## Fitur
+
+**Web dan PHP**
+- Caddy (default), Nginx, atau Apache. Memasang web server lain di halaman
+  Versi langsung memakainya; kembali lewat Pengaturan.
+- Beberapa versi PHP berdampingan, dipilih per proyek atau otomatis dari
+  `composer.json`. Ekstensi PECL (imagick, redis, apcu, …) sekali klik,
+  dan Xdebug.
+- Situs dikompilasi ke OPcache di latar belakang begitu ditambahkan, jadi
+  kunjungan pertama pun cepat.
+- Setiap folder di `www/` jadi situs dalam sedetik, termasuk symlink dan
+  junction. Proyek di tempat lain (`D:\projects\app`) ditambahkan dengan
+  satu klik. Tiap proyek memakai `.localhost` (default) atau `.test`.
+- HTTPS lokal dari CA yang hanya berlaku untuk `.localhost`, `.test`, dan
+  komputer ini.
+
+**Database**
+- MySQL, MariaDB, dan PostgreSQL, dengan beberapa versi MySQL atau
+  MariaDB berjalan bersamaan, masing-masing di port sendiri.
+- Buka di **phpMyAdmin** atau **Adminer** (Adminer juga untuk PostgreSQL)
+  dari halaman Database atau tombol **Admin** di Beranda, langsung masuk.
+  HeidiSQL ditawarkan kalau terpasang.
+- Backup, restore, dan upgrade versi dengan backup otomatis lebih dulu.
+
+**Layanan dan bahasa lain**
+- Redis dan Mailpit (menangkap email yang dikirim proyekmu).
+- Proyek Node.js, Python, dan Go: terdeteksi, diberi versi yang cocok, dan
+  dev server-nya bisa diakses lewat nama proyek.
+- Menyalakan layanan yang belum terpasang di Beranda akan mengunduhnya
+  dulu.
+
+**Pindah dari aplikasi lain**
+- Mengimpor proyek dan database dari Laragon, XAMPP, WampServer, atau
+  FlyEnv yang terdeteksi otomatis. Proyek yang tersimpan di dalam
+  aplikasi lama ikut disalin, jadi aplikasi itu bisa dihapus setelahnya.
+- Kebutuhan tiap proyek (versi PHP, database, versi Node) dibaca dari
+  file-nya; Beranda menyebutkan yang kurang, lengkap dengan tombol pasang.
+- Kalau port dipakai program lain (MySQL Laragon di 3306), MeowServer
+  pindah ke port kosong dan kembali begitu port itu bebas.
+
+**Kecil dan menjaga privasi**
+- Unduhan hanya dari sumber resmi, dengan checksum diverifikasi.
+- Ikon tray (±14 MB RAM) dan jendela native yang kecil. Tanpa Electron,
+  tanpa webview. Program bantu berjalan tanpa jendela CMD.
+
+## Database
+
+Halaman Database menampilkan host, port, dan user tiap server (`root` untuk
+MySQL dan MariaDB, `postgres` untuk PostgreSQL, tanpa password; hanya bisa
+diakses dari komputer ini). **Buka di:** membukanya di browser lewat
+`http://phpmyadmin.localhost` atau `http://adminer.localhost`; klik pertama
+mengunduh alatnya.
+
+## Memperbarui
+
+Di MeowServer: **Pengaturan → Periksa update → Update sekarang**. Atau
+jalankan sendiri setup yang lebih baru. Keduanya hanya mengganti file
+program; proyek (`www`), database (`data`), pengaturan (`meow.toml`), dan
+versi yang sudah diunduh (`bin`) tetap ada. Folder portable diperbarui
+dengan cara yang sama: pilih folder itu sebagai folder instalasi.
+Uninstall juga tidak menghapusnya; hapus foldernya sendiri kalau sudah
+tidak dipakai.
+
+## Lewat terminal
 
 ```
-meow install caddy
-meow install php
-meow install mysql 8.4
-meow up
-meow link D:\projects\my-app      # → http://my-app.localhost
-meow new laravel blog             # → http://blog.localhost
-meow ssl trust                    # https:// tanpa peringatan
-meow doctor                       # apa yang salah, dan cara memperbaikinya
+meow up                            # jalankan layanan
+meow link D:\projects\my-app       # → http://my-app.localhost
+meow site my-app --domain test     # → http://my-app.test
+meow new laravel blog              # → http://blog.localhost
+meow install php 8.3               # versi PHP lain
+meow site blog --php 8.3           # pakai untuk satu proyek
+meow ext install imagick           # ekstensi PECL
+meow dev start my-next-app         # dev server Node, Python, atau Go
+meow ssl trust                     # https:// tanpa peringatan
+meow doctor                        # apa yang salah, dan cara memperbaikinya
 ```
 
 `meow --help` menampilkan semua perintah.
 
-## Unduh
+## Folder
 
-Installer dan zip portable ada di
-[halaman Releases](https://github.com/pustekno/meowserver/releases). Versi
-sebelum 1.0 adalah pre-release. Update tidak mengubah proyek, database,
-dan pengaturanmu: jalankan setup yang lebih baru, atau tekan Update di
-Pengaturan.
+```
+MeowServer/
+├── meowd(.exe)        tray dan pengelola layanan
+├── meowserver(.exe)   jendela
+├── meow(.exe)         command line
+├── meow.toml          pengaturan, termasuk per situs
+├── bin/               layanan yang diunduh, satu folder per versi
+├── etc/generated/     konfigurasi yang ditulis MeowServer (jangan diubah)
+├── etc/custom/        penyesuaianmu, tidak pernah disentuh
+├── data/              file database, per layanan dan versi
+├── www/               proyekmu
+├── logs/
+└── ssl/               certificate authority lokal
+```
 
 ## Privasi
 
@@ -88,7 +151,7 @@ atau memberi bintang di GitHub; "Jangan tampilkan lagi" menghentikannya.
 
 - Pertanyaan, ide, dan berbagi setup:
   [Discussions](https://github.com/pustekno/meowserver/discussions)
-- Ada yang rusak: Pengaturan → Laporkan masalah, atau
+- Ada yang rusak: **Pengaturan → Laporkan masalah**, atau
   [buat issue](https://github.com/pustekno/meowserver/issues/new/choose)
 - Ikut berkontribusi: lihat [CONTRIBUTING.md](CONTRIBUTING.md)
 
@@ -98,7 +161,7 @@ Bahasa Indonesia dan Inggris sama-sama boleh.
 
 ```
 cargo build --release
-cargo xtask dist        # arsip portable di dist/
+cargo xtask dist        # zip portable dan setup di dist/
 ```
 
 Lihat [CONTRIBUTING.md](CONTRIBUTING.md) (bahasa Inggris).
