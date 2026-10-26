@@ -163,7 +163,8 @@ pub fn installed(layout: &Layout, kind: Kind) -> Vec<Installed> {
     let Ok(entries) = std::fs::read_dir(&dir) else { return Vec::new() };
     let mut out: Vec<Installed> = entries
         .filter_map(Result::ok)
-        .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
+        // Following links: a build used where it is (a Homebrew keg) counts.
+        .filter(|e| e.path().is_dir())
         .filter_map(|e| {
             let version = e.file_name().to_str()?.parse::<Version>().ok()?;
             Some(Installed { kind, version, dir: e.path() })
