@@ -16,6 +16,9 @@ bind-address={{ bind }}
 {% if mysqlx_off %}
 mysqlx=OFF
 {% endif %}
+{% if socket %}
+socket={{ socket | slashes | quote }}
+{% endif %}
 log-error={{ error_log | slashes | quote }}
 pid-file={{ pid | slashes | quote }}
 secure-file-priv=""

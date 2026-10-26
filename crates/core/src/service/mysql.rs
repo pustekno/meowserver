@@ -30,6 +30,7 @@ struct IniContext {
     port: u16,
     bind: &'static str,
     mysqlx_off: bool,
+    socket: Option<PathBuf>,
     error_log: PathBuf,
     pid: PathBuf,
     collation: &'static str,
@@ -82,6 +83,20 @@ pub fn instances(layout: &Layout, config: &Config, kind: Kind) -> Result<(Vec<In
     Ok((out, warnings))
 }
 
+/// The server's Unix socket. Left alone it is /tmp/mysql.sock, which
+/// Homebrew's or the system's MySQL already holds, and the server then
+/// refuses to start. MeowServer's tools connect over TCP; this only has to
+/// be a path of its own, and short: macOS allows 104 bytes.
+fn socket_path(layout: &Layout, id: &str) -> PathBuf {
+    let inside = layout.tmp().join(format!("{id}.sock"));
+    if inside.as_os_str().len() < 100 {
+        return inside;
+    }
+    use sha2::{Digest, Sha256};
+    let hash = crate::http::to_hex(&Sha256::digest(layout.root().as_os_str().as_encoded_bytes()));
+    PathBuf::from("/tmp").join(format!("meow-{}-{id}.sock", &hash[..12]))
+}
+
 fn product(kind: Kind) -> &'static str {
     if kind == Kind::Mysql { "MySQL" } else { "MariaDB" }
 }
@@ -113,6 +128,7 @@ fn plan_one(layout: &Layout, kind: Kind, instance: &Instance) -> Result<ProcessS
         port,
         bind: bind_address(kind, version),
         mysqlx_off: kind == Kind::Mysql && version.major() >= 8,
+        socket: (os() != Os::Windows).then(|| socket_path(layout, &instance.id)),
         error_log: layout.logs().join(format!("{}-{line}.err.log", kind.id())),
         pid: layout.tmp().join(format!("{}-{line}.pid", kind.id())),
         collation: if kind == Kind::Mysql && version.major() >= 8 {
@@ -274,4 +290,25 @@ fn initialize(layout: &Layout, kind: Kind, installed: &Installed, ini: &Path, da
     // mariadb-install-db on Windows writes its own my.ini, which we do not use.
     let _ = std::fs::remove_file(data.join("my.ini"));
     datadir::write_marker(data, kind, &installed.version)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn socket_stays_in_the_folder_unless_the_path_is_too_long() {
+        let short = Layout::at(PathBuf::from("/Users/me/MeowServer"));
+        assert_eq!(socket_path(&short, "mysql"), short.tmp().join("mysql.sock"));
+
+        let deep = Layout::at(PathBuf::from(format!("/Users/me/{}/MeowServer", "nested/".repeat(15))));
+        let socket = socket_path(&deep, "mysql-5.7");
+        let name = socket.file_name().unwrap().to_string_lossy().into_owned();
+        assert_eq!(socket.parent(), Some(Path::new("/tmp")));
+        assert!(name.starts_with("meow-") && name.ends_with("-mysql-5.7.sock"), "{name}");
+        assert!(socket.as_os_str().len() < 104, "macOS limit");
+        assert_eq!(socket, socket_path(&deep, "mysql-5.7"), "the same folder gets the same path");
+        let other = Layout::at(PathBuf::from(format!("/Users/you/{}/MeowServer", "nested/".repeat(15))));
+        assert_ne!(socket, socket_path(&other, "mysql-5.7"), "another folder gets another path");
+    }
 }
