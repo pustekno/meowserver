@@ -293,7 +293,7 @@ mod tests {
     fn link(target: &Path, link: &Path) {
         #[cfg(windows)]
         {
-            let status = std::process::Command::new("cmd")
+            let status = crate::platform::command("cmd")
                 .args(["/C", "mklink", "/J"])
                 .arg(link)
                 .arg(target)

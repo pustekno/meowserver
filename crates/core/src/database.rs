@@ -9,7 +9,7 @@
 use std::fs::File;
 use std::io::{BufReader, Read, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
 use anyhow::{Context, Result, bail};
 use flate2::Compression;
@@ -93,16 +93,16 @@ pub fn backup(layout: &Layout, kind: Kind, database: Option<&str>) -> Result<Pat
     let mut cmd = if kind == Kind::Postgres {
         let mut c = match database {
             Some(db) => {
-                let mut c = Command::new(tool(&installed, &["pg_dump"])?);
+                let mut c = crate::platform::command(tool(&installed, &["pg_dump"])?);
                 c.args(["--create", db]);
                 c
             }
-            None => Command::new(tool(&installed, &["pg_dumpall"])?),
+            None => crate::platform::command(tool(&installed, &["pg_dumpall"])?),
         };
         c.args(["-h", "127.0.0.1", "-p", &port, "-U", "postgres"]);
         c
     } else {
-        let mut c = Command::new(tool(&installed, &["mariadb-dump", "mysqldump"])?);
+        let mut c = crate::platform::command(tool(&installed, &["mariadb-dump", "mysqldump"])?);
         c.args(["-u", "root", "-h", "127.0.0.1", "-P", &port]);
         c.args(["--single-transaction", "--routines", "--triggers", "--events", "--hex-blob"]);
         match database {
@@ -133,7 +133,7 @@ pub fn restore(layout: &Layout, kind: Kind, file: &Path) -> Result<()> {
     let installed = active(layout, &config, kind)?;
     let port = port(&config, kind).to_string();
     let mut cmd = if kind == Kind::Postgres {
-        let mut c = Command::new(tool(&installed, &["psql"])?);
+        let mut c = crate::platform::command(tool(&installed, &["psql"])?);
         c.args([
             "-h",
             "127.0.0.1",
@@ -149,7 +149,7 @@ pub fn restore(layout: &Layout, kind: Kind, file: &Path) -> Result<()> {
         ]);
         c
     } else {
-        let mut c = Command::new(tool(&installed, &["mariadb", "mysql"])?);
+        let mut c = crate::platform::command(tool(&installed, &["mariadb", "mysql"])?);
         c.args(["-u", "root", "-h", "127.0.0.1", "-P", &port]);
         c
     };
@@ -231,7 +231,7 @@ pub fn open_tool(layout: &Layout, kind: Kind) -> Result<()> {
         let line = template.replace("{host}", "127.0.0.1").replace("{port}", &port).replace("{user}", user);
         let mut parts = line.split_whitespace();
         let program = parts.next().context("general.db_tool is empty")?;
-        let mut cmd = Command::new(program);
+        let mut cmd = crate::platform::command(program);
         cmd.args(parts);
         crate::platform::spawn_detached(&mut cmd)?;
         return Ok(());
@@ -240,7 +240,7 @@ pub fn open_tool(layout: &Layout, kind: Kind) -> Result<()> {
         if let Some(heidi) = heidisql() {
             // HeidiSQL: -n = network type (0 MySQL/MariaDB, 3 PostgreSQL).
             let net = if kind == Kind::Postgres { "3" } else { "0" };
-            let mut cmd = Command::new(heidi);
+            let mut cmd = crate::platform::command(heidi);
             cmd.args([
                 format!("-n={net}"),
                 "-h=127.0.0.1".into(),

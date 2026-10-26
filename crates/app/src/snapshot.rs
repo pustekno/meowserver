@@ -146,7 +146,7 @@ pub fn take(layout: &Layout) -> Snapshot {
     let web = {
         let http = config.port("web", 80);
         if config.general.https {
-            format!(":{http}, :{}", config.tls_port("web", 443))
+            format!(":{http}\n:{}", config.tls_port("web", 443))
         } else {
             format!(":{http}")
         }
@@ -171,12 +171,12 @@ pub fn take(layout: &Layout) -> Snapshot {
                 Some(if versions.len() > 1 { format!("{} {span}", v.line()) } else { span })
             })
             .collect();
-        ranges.join(", ")
+        ranges.join("\n")
     };
     let database = |kind: Kind| {
         let mut text = format!(":{}", config.port(kind.id(), mysql::DEFAULT_PORT));
         for (line, port) in config.services.get(kind.id()).map(|s| s.extra.clone()).unwrap_or_default() {
-            text.push_str(&format!(", {line} :{port}"));
+            text.push_str(&format!("\n{line} :{port}"));
         }
         text
     };
@@ -197,7 +197,7 @@ pub fn take(layout: &Layout) -> Snapshot {
             Kind::Mailpit,
             "Mailpit".into(),
             format!(
-                ":{} SMTP, :{} web",
+                ":{} SMTP\n:{} web",
                 config.port("mailpit", mailpit::SMTP_PORT),
                 config.web_port("mailpit", mailpit::WEB_PORT)
             ),

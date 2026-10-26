@@ -145,16 +145,33 @@ pub fn run_elevated(program: &std::path::Path, args: &[String]) -> std::io::Resu
     imp::run_elevated(program, args)
 }
 
-/// Opens a folder or URL with the desktop's default handler.
+/// Opens a folder or URL with the desktop's default handler. On Windows
+/// through the shell: `explorer <url>` opens a folder window instead when
+/// the URL has a query (`?server=1`).
 pub fn open(target: &std::ffi::OsStr) -> std::io::Result<()> {
-    let program = match os() {
-        Os::Windows => "explorer",
-        Os::MacOs => "open",
-        Os::Linux => "xdg-open",
-    };
+    #[cfg(windows)]
+    return imp::shell_open(target);
+    #[cfg(not(windows))]
+    {
+        let mut cmd = Command::new(if os() == Os::MacOs { "open" } else { "xdg-open" });
+        cmd.arg(target);
+        spawn_detached(&mut cmd).map(drop)
+    }
+}
+
+/// A command for a helper program that shows no console window. The
+/// MeowServer window and `meowd` have no console, so on Windows every
+/// console program they start (mysqladmin, PowerShell, php) would
+/// otherwise flash one.
+pub fn command(program: impl AsRef<std::ffi::OsStr>) -> Command {
+    #[allow(unused_mut)]
     let mut cmd = Command::new(program);
-    cmd.arg(target);
-    spawn_detached(&mut cmd).map(drop)
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(windows_sys::Win32::System::Threading::CREATE_NO_WINDOW);
+    }
+    cmd
 }
 
 /// The user's language as a two-letter code (`en`, `id`, …).

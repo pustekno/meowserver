@@ -187,8 +187,23 @@ fn upgrade_when_flagged(instance: Instance) {
                 .is_ok_and(|s| s.success())
         };
         for _ in 0..60 {
-            if quiet(Command::new(&client).args(["-u", "root", "-h", "127.0.0.1", "-P", &port, "ping"])) {
-                if quiet(Command::new(&upgrade).args(["-u", "root", "-h", "127.0.0.1", "-P", &port])) {
+            if quiet(crate::platform::command(&client).args([
+                "-u",
+                "root",
+                "-h",
+                "127.0.0.1",
+                "-P",
+                &port,
+                "ping",
+            ])) {
+                if quiet(crate::platform::command(&upgrade).args([
+                    "-u",
+                    "root",
+                    "-h",
+                    "127.0.0.1",
+                    "-P",
+                    &port,
+                ])) {
                     let _ = std::fs::remove_file(&flag);
                     log::info!("mariadb-upgrade finished");
                 } else {
@@ -228,17 +243,17 @@ fn initialize(layout: &Layout, kind: Kind, installed: &Installed, ini: &Path, da
 
     let mut cmd = match (kind, os()) {
         (Kind::Mysql, _) => {
-            let mut c = Command::new(tool(installed, "mysqld"));
+            let mut c = crate::platform::command(tool(installed, "mysqld"));
             c.arg(format!("--defaults-file={}", ini.display())).arg("--initialize-insecure");
             c
         }
         (_, Os::Windows) => {
-            let mut c = Command::new(tool(installed, "mariadb-install-db"));
+            let mut c = crate::platform::command(tool(installed, "mariadb-install-db"));
             c.arg(format!("--datadir={}", data.display()));
             c
         }
         _ => {
-            let mut c = Command::new(installed.dir.join("scripts").join("mariadb-install-db"));
+            let mut c = crate::platform::command(installed.dir.join("scripts").join("mariadb-install-db"));
             c.arg("--no-defaults")
                 .arg(format!("--basedir={}", installed.dir.display()))
                 .arg(format!("--datadir={}", data.display()))

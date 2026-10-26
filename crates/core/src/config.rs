@@ -40,6 +40,10 @@ pub struct General {
     /// Command that opens a database GUI, with `{host}`, `{port}`, `{user}`
     /// (PRD F28). Unset: HeidiSQL when installed.
     pub db_tool: Option<String>,
+    /// The browser tool Home's Admin button opens for MySQL and MariaDB:
+    /// `phpmyadmin` (as XAMPP) or `adminer`; the last one used on the
+    /// Databases page.
+    pub db_admin: Option<String>,
     pub lan_access: bool,
     /// Write hosts entries for every site (PRD F16).
     pub manage_hosts: bool,
@@ -163,6 +167,7 @@ impl Default for General {
             autostart: vec!["web".into(), "php".into(), "mysql".into()],
             editor: None,
             db_tool: None,
+            db_admin: None,
             lan_access: false,
             manage_hosts: true,
             https: true,

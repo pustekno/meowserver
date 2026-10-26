@@ -7,7 +7,7 @@
 
 use std::io::Write;
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
@@ -58,7 +58,7 @@ fn initialize(layout: &Layout, installed: &Installed, data: &Path) -> Result<()>
     let log_path = layout.logs().join("postgres-init.log");
     let log = crate::logging::open_rotated(&log_path)?;
     log::info!("initializing PostgreSQL data in {}", data.display());
-    let mut cmd = Command::new(installed.dir.join("bin").join(format!("initdb{EXE_SUFFIX}")));
+    let mut cmd = crate::platform::command(installed.dir.join("bin").join(format!("initdb{EXE_SUFFIX}")));
     cmd.args(["-U", "postgres", "-A", "trust", "-E", "UTF8", "--locale=C", "-D"])
         .arg(data)
         .stdin(Stdio::null())

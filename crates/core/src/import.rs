@@ -10,7 +10,7 @@
 //! the user asks (`stop_databases`).
 
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
@@ -461,8 +461,12 @@ fn database(dir: &Path, server: Option<&Path>) -> Option<Database> {
 
 /// `mysqld --version` → "… Ver 10.4.32-MariaDB …" or "… Ver 8.0.31 for …".
 fn binary_version(server: &Path) -> Option<(Kind, Version)> {
-    let out =
-        Command::new(server).arg("--version").stdin(Stdio::null()).stderr(Stdio::null()).output().ok()?;
+    let out = crate::platform::command(server)
+        .arg("--version")
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .output()
+        .ok()?;
     let text = String::from_utf8_lossy(&out.stdout);
     let after = text.split("Ver ").nth(1)?;
     let raw = after.split_whitespace().next()?;
@@ -495,7 +499,7 @@ pub fn stop_databases(source: &Source) -> Vec<String> {
     for (pid, path) in &running {
         let admin = Path::new(path).with_file_name(format!("mysqladmin{EXE_SUFFIX}"));
         if on_standard_port.contains(pid) && admin.is_file() {
-            let ok = Command::new(&admin)
+            let ok = crate::platform::command(&admin)
                 .args(["-u", "root", "-h", "127.0.0.1", "-P", "3306", "--connect-timeout=5", "shutdown"])
                 .stdin(Stdio::null())
                 .stdout(Stdio::null())
@@ -946,7 +950,7 @@ fn make_dir_link(target: &Path, link: &Path) -> bool {
     {
         // `mklink` takes backslashes only.
         let native = |p: &Path| p.to_string_lossy().replace('/', "\\");
-        Command::new("cmd")
+        crate::platform::command("cmd")
             .args(["/C", "mklink", "/J"])
             .arg(native(link))
             .arg(native(target))

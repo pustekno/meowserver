@@ -9,7 +9,7 @@
 //! prompt, and is undone by "Undo system changes" (PRD F36).
 
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
 use anyhow::{Result, bail};
 use serde::{Deserialize, Serialize};
@@ -84,7 +84,7 @@ pub fn realtime_enabled() -> Option<bool> {
     if os() != Os::Windows {
         return None;
     }
-    let out = Command::new("powershell.exe")
+    let out = crate::platform::command("powershell.exe")
         .args([
             "-NoProfile",
             "-NonInteractive",
@@ -111,7 +111,7 @@ pub fn apply(layout: &Layout, paths: &[PathBuf], add: bool) -> Result<()> {
         paths.iter().map(|p| format!("'{}'", p.display().to_string().replace('\'', "''"))).collect();
     let verb = if add { "Add-MpPreference" } else { "Remove-MpPreference" };
     let script = format!("{verb} -ExclusionPath {}", list.join(","));
-    let status = Command::new("powershell.exe")
+    let status = crate::platform::command("powershell.exe")
         .args(["-NoProfile", "-NonInteractive", "-Command", &script])
         .stdin(Stdio::null())
         .status()?;

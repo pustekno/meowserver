@@ -9,7 +9,7 @@
 
 use std::net::Ipv6Addr;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
 use anyhow::{Context, Result, bail};
 use rcgen::{
@@ -270,7 +270,7 @@ fn nss_add(ca: &Path) {
 }
 
 fn run(program: &str, args: &[&str]) -> bool {
-    Command::new(program)
+    crate::platform::command(program)
         .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::null())

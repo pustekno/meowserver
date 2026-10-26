@@ -330,6 +330,26 @@ impl Engine {
         self.foreign_processes(port).into_iter().map(|(pid, exe)| format!("{exe} (pid {pid})")).collect()
     }
 
+    /// What holds `port` besides `unit` itself: other programs, and
+    /// MeowServer's other services (MySQL and MariaDB both default to 3306).
+    fn other_owners(&self, unit: Unit, port: u16) -> Vec<String> {
+        let own: Vec<u32> = self
+            .supervisor
+            .status()
+            .into_iter()
+            .filter(|p| unit.owns(&p.id))
+            .filter_map(|p| match p.state {
+                supervisor::State::Running { pid } => Some(pid),
+                _ => None,
+            })
+            .collect();
+        platform::port_owners(port)
+            .into_iter()
+            .filter(|(pid, _)| !own.contains(pid))
+            .map(|(pid, exe)| format!("{exe} (pid {pid})"))
+            .collect()
+    }
+
     fn foreign_processes(&self, port: u16) -> Vec<(u32, String)> {
         platform::port_owners(port)
             .into_iter()
@@ -376,7 +396,7 @@ impl Engine {
                 ));
                 continue;
             }
-            let owners = self.foreign_owners(current);
+            let owners = self.other_owners(unit, current);
             if owners.is_empty() {
                 continue;
             }
@@ -385,6 +405,17 @@ impl Engine {
             else {
                 continue;
             };
+            // MeowServer's own other service (MySQL beside MariaDB): stay
+            // on the new port, or the two would swap whenever one stops.
+            if self.foreign_owners(current).is_empty() {
+                change(&mut moved, &mut changes, Change::Port { service, field, port: free, from: original });
+                notes.push(format!(
+                    "{service}: port {current} is used by {}, so MeowServer's {service} uses port {free} \
+                     (saved in meow.toml)",
+                    owners.join(" and "),
+                ));
+                continue;
+            }
             let from = Some(original.unwrap_or(current));
             change(&mut moved, &mut changes, Change::Port { service, field, port: free, from });
             notes.push(format!(
@@ -395,7 +426,7 @@ impl Engine {
         }
         if let Some(kind) = database_kind(unit) {
             for (line, port) in extra_versions(&moved, kind) {
-                let owners = self.foreign_owners(port);
+                let owners = self.other_owners(unit, port);
                 if owners.is_empty() {
                     continue;
                 }

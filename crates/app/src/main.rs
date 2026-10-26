@@ -23,7 +23,7 @@ use anyhow::Result;
 use meow_core::config::{Config, Suffix, WebServer};
 use meow_core::ipc::Request;
 use meow_core::layout::Layout;
-use meow_core::service::{self, Kind, php};
+use meow_core::service::{self, Kind, Unit, php};
 use meow_core::site::{self, manage};
 use meow_core::{branding, doctor, import, platform, report, terminal};
 use slint::{ComponentHandle, Model, ModelRc, SharedString, VecModel};
@@ -1013,11 +1013,44 @@ fn wire(window: &AppWindow, ui: &Ui) {
             }
         }
     });
+    b.on_service_admin({
+        let ui = ui.clone();
+        move |unit| {
+            let unit = unit.to_string();
+            ui.run(move |l, ui| {
+                let config = Config::load(l)?;
+                let url = match unit.as_str() {
+                    "web" => snapshot::take(l).localhost_url,
+                    "mailpit" => format!(
+                        "http://127.0.0.1:{}/",
+                        config.web_port("mailpit", meow_core::service::mailpit::WEB_PORT)
+                    ),
+                    "postgres" => return actions::open_db_tool(l, ui, Kind::Adminer, &unit),
+                    _ => {
+                        let tool = match config.general.db_admin.as_deref() {
+                            Some("adminer") => Kind::Adminer,
+                            _ => Kind::Phpmyadmin,
+                        };
+                        return actions::open_db_tool(l, ui, tool, &unit);
+                    }
+                };
+                platform::open(std::ffi::OsStr::new(&url))?;
+                Ok(String::new())
+            })
+        }
+    });
     b.on_db_open_web({
         let ui = ui.clone();
         move |unit, tool| {
             let (Some(_), Some(tool)) = (Kind::from_id(&unit), Kind::from_id(&tool)) else { return };
             let unit = unit.to_string();
+            // Home's Admin button opens the one chosen last.
+            if unit != "postgres" {
+                let _ = edit_config(&ui.layout, |c| {
+                    c.general.db_admin = Some(tool.id().into());
+                    Ok(())
+                });
+            }
             ui.run(move |l, ui| actions::open_db_tool(l, ui, tool, &unit))
         }
     });
@@ -1111,6 +1144,7 @@ fn apply(w: &AppWindow, snap: &snapshot::Snapshot, local: &mut Local) {
                 running: s.running,
                 failed: s.failed,
                 installed: s.version.is_some(),
+                admin: !matches!(s.unit, Unit::Php | Unit::Redis),
             })
             .collect(),
     ));

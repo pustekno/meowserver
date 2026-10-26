@@ -5,7 +5,7 @@
 //! Quick create (PRD F13): a new project in `www/` from a template.
 
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, bail};
@@ -105,7 +105,7 @@ fn composer_create(
     ));
     let log_path = layout.logs().join("create-project.log");
     let log = crate::logging::open_rotated(&log_path)?;
-    let status = Command::new(php.exe("php"))
+    let status = crate::platform::command(php.exe("php"))
         .arg(composer.dir.join("composer.phar"))
         .args(["create-project", package, slug, "--prefer-dist", "--no-interaction", "--no-progress"])
         .current_dir(www)
@@ -175,7 +175,7 @@ fn create_database(layout: &Layout, config: &Config, name: &str) -> Result<Strin
         let port = config.port(kind.id(), mysql::DEFAULT_PORT);
         let client = installed.dir.join("bin").join(format!("mysql{EXE_SUFFIX}"));
         let sql = format!("CREATE DATABASE IF NOT EXISTS `{name}` CHARACTER SET utf8mb4");
-        let ok = Command::new(&client)
+        let ok = crate::platform::command(&client)
             .args(["-u", "root", "-h", "127.0.0.1", "-P", &port.to_string(), "-e", &sql])
             .stdin(Stdio::null())
             .stdout(Stdio::null())

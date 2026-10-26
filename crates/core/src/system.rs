@@ -6,7 +6,7 @@
 //! one step (PRD F1 login item, F36 undo).
 
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
 use anyhow::{Context, Result, bail};
 
@@ -69,7 +69,7 @@ pub fn set_login_item(layout: &Layout, enabled: bool) -> Result<()> {
 /// may own it; undoing or uninstalling this one must leave that alone.
 pub fn login_item_here(layout: &Layout) -> bool {
     let registered = match os() {
-        Os::Windows => Command::new("reg")
+        Os::Windows => crate::platform::command("reg")
             .args(["query", RUN_KEY, "/v", LOGIN_NAME])
             .stdin(Stdio::null())
             .stderr(Stdio::null())
@@ -162,7 +162,7 @@ fn home() -> Result<std::path::PathBuf> {
 }
 
 fn run(program: &str, args: &[&str]) -> bool {
-    Command::new(program)
+    crate::platform::command(program)
         .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::null())

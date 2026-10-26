@@ -302,6 +302,27 @@ pub fn process_names() -> Vec<(u32, String)> {
     out
 }
 
+/// Opens a URL or folder with its default program (the browser, Explorer).
+pub fn shell_open(target: &std::ffi::OsStr) -> io::Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::UI::Shell::{SEE_MASK_NOASYNC, SHELLEXECUTEINFOW, ShellExecuteExW};
+
+    let wide = |s: &std::ffi::OsStr| s.encode_wide().chain([0]).collect::<Vec<u16>>();
+    let verb = wide("open".as_ref());
+    let file = wide(target);
+    let mut info: SHELLEXECUTEINFOW = unsafe { std::mem::zeroed() };
+    info.cbSize = size_of::<SHELLEXECUTEINFOW>() as u32;
+    // Called from short-lived worker threads: finish before returning.
+    info.fMask = SEE_MASK_NOASYNC;
+    info.lpVerb = verb.as_ptr();
+    info.lpFile = file.as_ptr();
+    info.nShow = 1; // SW_SHOWNORMAL
+    if unsafe { ShellExecuteExW(&mut info) } == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(())
+}
+
 /// Runs `program args` with administrator rights after a UAC prompt and
 /// waits for it. Returns its exit code; an error if the user declined.
 pub fn run_elevated(program: &std::path::Path, args: &[String]) -> io::Result<i32> {

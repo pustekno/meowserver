@@ -111,7 +111,7 @@ export component HomePage inherits VerticalLayout {
                 }
                 for s in Backend.services: HorizontalLayout {
                     spacing: 10px;
-                    height: 34px;
+                    min-height: 34px;
                     Dot {
                         on: s.running;
                         failed: s.failed;
@@ -129,12 +129,11 @@ export component HomePage inherits VerticalLayout {
                         width: 90px;
                         color: Theme.muted;
                     }
-                    // Every port it listens on (`:80, :443`), like Laragon.
+                    // Every port it listens on, one per line as in XAMPP.
                     Text {
                         text: s.port;
                         vertical-alignment: center;
-                        width: 210px;
-                        overflow: elide;
+                        width: 160px;
                         color: Theme.muted;
                     }
                     Text {
@@ -143,6 +142,14 @@ export component HomePage inherits VerticalLayout {
                         horizontal-stretch: 1;
                         overflow: elide;
                         color: s.failed ? Theme.bad : Theme.muted;
+                    }
+                    Button {
+                        text: "Admin";
+                        visible: s.admin;
+                        enabled: s.running && !Backend.busy;
+                        clicked => {
+                            Backend.service-admin(s.unit);
+                        }
                     }
                     Switch {
                         enabled: !Backend.busy;

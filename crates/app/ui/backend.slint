@@ -14,6 +14,8 @@ export struct ServiceRow {
     running: bool,
     failed: bool,
     installed: bool,
+    // Has a page to manage it (localhost, phpMyAdmin, Mailpit).
+    admin: bool,
 }
 
 export struct SiteRow {
@@ -238,6 +240,8 @@ export global Backend {
     // HeidiSQL or general.db_tool is there for db-open.
     in property <bool> desktop-db-tool;
     callback db-open(string);
+    // Home's Admin button, as in XAMPP.
+    callback service-admin(string);
     // Opens a database server in Adminer or phpMyAdmin, installing it first.
     callback db-open-web(string, string);
     callback install-service(string);
