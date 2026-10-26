@@ -75,7 +75,12 @@ pub fn run(layout: &Layout) -> Vec<Check> {
                     kind.id(),
                     selector.map(|s| format!("{s} ")).unwrap_or_default()
                 ),
-                format!("meow install {} {}", kind.id(), selector.unwrap_or("")).trim_end().to_owned(),
+                match crate::provider::for_service(kind) {
+                    Some(_) => {
+                        format!("meow install {} {}", kind.id(), selector.unwrap_or("")).trim_end().to_owned()
+                    }
+                    None => crate::provider::not_downloadable(kind.id(), layout),
+                },
             )),
         }
     }

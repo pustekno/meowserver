@@ -34,9 +34,8 @@ pub fn list(layout: &Layout, service: &str, available: bool, json: bool) -> Resu
     let kind = parse_kind(service)?;
     let installed = service::installed(layout, kind);
     if available {
-        let provider = provider::for_service(kind).with_context(|| {
-            format!("{service} cannot be downloaded on this platform; install it with your package manager")
-        })?;
+        let provider =
+            provider::for_service(kind).with_context(|| provider::not_downloadable(kind.id(), layout))?;
         let releases = provider.releases(&Http::new())?;
         if json {
             return print::json(&releases);
@@ -66,9 +65,8 @@ pub fn list(layout: &Layout, service: &str, available: bool, json: bool) -> Resu
 
 pub fn install(layout: &Layout, service: &str, selector: Option<&str>) -> Result<()> {
     let kind = parse_kind(service)?;
-    let provider = provider::for_service(kind).with_context(|| {
-        format!("{service} cannot be downloaded on this platform; install it with your package manager")
-    })?;
+    let provider =
+        provider::for_service(kind).with_context(|| provider::not_downloadable(kind.id(), layout))?;
     let http = Http::new();
     let releases = provider.releases(&http)?;
     let release = releases

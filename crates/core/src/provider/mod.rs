@@ -103,6 +103,16 @@ pub fn for_service(kind: Kind) -> Option<Box<dyn Provider>> {
     })
 }
 
+/// What to do about a service with no download for this platform. System
+/// packages are not used yet (PRD F4), so a build has to go into `bin/`.
+pub fn not_downloadable(service: &str, layout: &crate::layout::Layout) -> String {
+    format!(
+        "{service} cannot be downloaded on this platform yet; extract a build into {} \
+         (e.g. {service}/<version>/) and it is picked up",
+        layout.root().join("bin").display()
+    )
+}
+
 fn sort_newest_first(releases: &mut [Release]) {
     releases.sort_by(|a, b| b.version.cmp(&a.version));
 }
