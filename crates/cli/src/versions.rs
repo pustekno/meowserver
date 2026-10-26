@@ -76,7 +76,15 @@ pub fn install(layout: &Layout, service: &str, selector: Option<&str>) -> Result
     layout.ensure()?;
     service::pin_before_install(layout, kind)?;
 
+    // A progress line ends without a newline; end it before printing more.
+    let progress_shown = std::cell::Cell::new(false);
+    let end_progress = || {
+        if progress_shown.replace(false) {
+            println!();
+        }
+    };
     let mut on_asset = |asset: &provider::Asset| {
+        end_progress();
         println!("Downloading {}", asset.url);
         if !asset.has_checksum() {
             println!("  note: upstream publishes no checksum for this file");
@@ -92,6 +100,7 @@ pub fn install(layout: &Layout, service: &str, selector: Option<&str>) -> Result
             Some(t) if t > 0 => print!("\r  {:>3}%  {:.1} MB", got * 100 / t, got as f64 / 1e6),
             _ => print!("\r  {:.1} MB", got as f64 / 1e6),
         }
+        progress_shown.set(true);
         let _ = std::io::stdout().flush();
     };
     let dir = download::install(
@@ -101,7 +110,8 @@ pub fn install(layout: &Layout, service: &str, selector: Option<&str>) -> Result
         release,
         Progress { on_asset: &mut on_asset, on_bytes: &mut on_bytes },
     )?;
-    println!("\rInstalled {service} {} in {}", release.version, dir.display());
+    end_progress();
+    println!("Installed {service} {} in {}", release.version, dir.display());
     Ok(())
 }
 
