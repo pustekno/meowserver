@@ -143,10 +143,17 @@ pub type Handler = Arc<dyn Fn(Request) -> Response + Send + Sync>;
 /// Starts serving requests on a background thread. Fails if another
 /// `meowd` already owns this folder's endpoint.
 pub fn serve(layout: &Layout, handler: Handler) -> Result<()> {
-    let listener = ListenerOptions::new()
-        .name(endpoint(layout)?)
-        .create_sync()
-        .context("another MeowServer is already running for this folder")?;
+    let listener = match ListenerOptions::new().name(endpoint(layout)?).create_sync() {
+        Ok(listener) => listener,
+        // On macOS the endpoint is a socket file in /tmp, left behind when
+        // `meowd` is killed. Nobody answering on it means it is stale.
+        Err(e)
+            if e.kind() == std::io::ErrorKind::AddrInUse && Stream::connect(endpoint(layout)?).is_err() =>
+        {
+            ListenerOptions::new().name(endpoint(layout)?).try_overwrite(true).create_sync()?
+        }
+        Err(e) => return Err(e).context("another MeowServer is already running for this folder"),
+    };
     std::thread::Builder::new().name("ipc".into()).spawn(move || {
         for conn in listener.incoming() {
             match conn {
