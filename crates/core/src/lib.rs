@@ -35,6 +35,7 @@ pub mod terminal;
 pub mod tls;
 pub mod update;
 pub mod version;
+pub mod warm;
 pub mod watch;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

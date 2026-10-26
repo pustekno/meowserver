@@ -268,6 +268,16 @@ checksums for these, so they come only from downloads.php.net over HTTPS.
 macOS and Linux builds have their extensions compiled in.
 *Done when:* `new Imagick()` works after one click on a fresh PHP 8.4.
 
+**F47 — Compile before the first visit.** The first visit to a Laravel
+site compiles thousands of `vendor` files (24 s measured on a cold
+OPcache). When PHP starts and when sites are added, MeowServer compiles
+each PHP site's files into OPcache's file cache in the background, one
+site at a time at low priority, with the web pool's own `php.ini` so the
+pool loads the result (1.3 s measured afterwards; 22 s of background work
+for 8,200 files). Nothing of the project runs: files are only compiled. A
+site is compiled again only when its PHP version or Composer packages
+change; edited files are recompiled on use by OPcache as before.
+
 **F46 — Sharing and updates without telemetry.** MeowServer counts
 nothing. Downloads are counted by GitHub Releases (published by the release
 workflow on every version tag; 0.x as pre-releases). Once, after two weeks
