@@ -53,9 +53,10 @@ pub fn need(problem: &site::needs::Problem) -> (String, String, String) {
                 fill("Install {} {}", &[name, suggest]),
             )
         }
+        // No button where none of the family's servers can be downloaded.
         Problem::DatabaseMissing { family } => (
             fill("Uses {}, which is not installed.", &[family.name()]),
-            family.kinds()[0].id().to_owned(),
+            problem.install().map(|(id, _)| id.to_owned()).unwrap_or_default(),
             fill("Install {}", &[family.name()]),
         ),
         Problem::DatabasePort { family, port, served, server } => {

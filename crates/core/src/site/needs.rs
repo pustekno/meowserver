@@ -191,7 +191,13 @@ impl Problem {
     pub fn install(&self) -> Option<(&'static str, String)> {
         match self {
             Problem::Php { suggest, .. } => Some(("php", suggest.clone())),
-            Problem::DatabaseMissing { family } => Some((family.kinds()[0].id(), String::new())),
+            // The first server of the family with a download here: MariaDB
+            // for a MySQL project on Linux, none on macOS.
+            Problem::DatabaseMissing { family } => family
+                .kinds()
+                .iter()
+                .find(|k| crate::provider::for_service(**k).is_some())
+                .map(|k| (k.id(), String::new())),
             Problem::Runtime { kind, suggest, .. } => Some((kind.id(), suggest.clone())),
             Problem::DatabasePort { .. } => None,
         }
@@ -206,11 +212,15 @@ impl Problem {
             Problem::Php { constraint, running, suggest } => format!(
                 "{site} needs PHP {constraint} but would run on PHP {running}; install PHP {suggest} (meow install php {suggest})"
             ),
-            Problem::DatabaseMissing { family } => format!(
-                "{site} uses {}, which is not installed (meow install {})",
-                family.name(),
-                family.kinds()[0].id()
-            ),
+            Problem::DatabaseMissing { family } => match self.install() {
+                Some((id, _)) => {
+                    format!("{site} uses {}, which is not installed (meow install {id})", family.name())
+                }
+                None => format!(
+                    "{site} uses {}, which is not installed and has no download on this platform yet",
+                    family.name()
+                ),
+            },
             Problem::Runtime { kind, constraint, suggest } if constraint.is_empty() => format!(
                 "{site} runs on {}, which is not installed (meow install {} {suggest})",
                 runtime_name(*kind),
@@ -473,6 +483,22 @@ mod tests {
             .filter(|(a, b)| allows(constraint, *a, *b))
             .map(|(a, b)| format!("{a}.{b}"))
             .collect()
+    }
+
+    #[test]
+    fn missing_database_offers_only_a_server_that_can_be_downloaded() {
+        let problem = Problem::DatabaseMissing { family: Family::Mysql };
+        match problem.install() {
+            Some((id, _)) => {
+                let kind = Kind::from_id(id).unwrap();
+                assert!(crate::provider::for_service(kind).is_some(), "{id} has no download here");
+            }
+            None => assert!(Family::Mysql.kinds().iter().all(|k| crate::provider::for_service(*k).is_none())),
+        }
+        if crate::platform::os() == crate::platform::Os::MacOs {
+            assert!(problem.install().is_none(), "neither MySQL nor MariaDB downloads on macOS");
+            assert!(problem.describe("blog").contains("no download on this platform"));
+        }
     }
 
     #[test]

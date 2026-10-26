@@ -206,9 +206,14 @@ pub fn run(layout: &Layout) -> Vec<Check> {
     // What projects need, from their own composer.json and settings.
     for s in &discovery.sites {
         for problem in site::needs::problems(layout, &config, s) {
-            let fix = match problem.install() {
-                Some((service, version)) => format!("meow install {service} {version}").trim_end().to_owned(),
-                None => "Change the port in the project's settings, or: meow db enable".into(),
+            let fix = match (problem.install(), &problem) {
+                (Some((service, version)), _) => {
+                    format!("meow install {service} {version}").trim_end().to_owned()
+                }
+                (None, site::needs::Problem::DatabaseMissing { family }) => {
+                    crate::provider::not_downloadable(family.kinds()[0].id(), layout)
+                }
+                (None, _) => "Change the port in the project's settings, or: meow db enable".into(),
             };
             checks.push(Check::problem(format!("site {}", s.name), problem.describe(&s.name), fix));
         }
