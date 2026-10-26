@@ -488,11 +488,12 @@ impl Engine {
                 ));
                 continue;
             }
-            let from = Some(original.unwrap_or(current));
-            change(&mut moved, &mut changes, Change::Port { service, field, port: free, from });
+            // Back to the usual port, not to one it had moved to before.
+            let back = original.unwrap_or(current);
+            change(&mut moved, &mut changes, Change::Port { service, field, port: free, from: Some(back) });
             notes.push(format!(
                 "{service}: port {current} is used by {}, so MeowServer's {service} uses port {free} for now \
-                 (it goes back to {current} when that port is free)",
+                 (it goes back to {back} when that port is free)",
                 owners.join(" and "),
             ));
         }
