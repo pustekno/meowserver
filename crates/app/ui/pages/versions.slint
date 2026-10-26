@@ -103,6 +103,31 @@ export component VersionsPage inherits VerticalLayout {
                         font-size: 16px;
                         font-weight: 600;
                     }
+                    // Web servers (indices 1-3, in Settings' order): which one serves the sites.
+                    if Backend.kind-index >= 1 && Backend.kind-index <= 3: HorizontalLayout {
+                        spacing: 10px;
+                        if Backend.web-index == Backend.kind-index - 1: Text {
+                            text: @tr("MeowServer serves your sites with this web server.");
+                            color: Theme.ok;
+                            vertical-alignment: center;
+                            wrap: word-wrap;
+                        }
+                        if Backend.web-index != Backend.kind-index - 1: Text {
+                            text: @tr("Your sites are served by {} now.", Backend.kinds[Backend.web-index + 1]);
+                            color: Theme.muted;
+                            vertical-alignment: center;
+                            horizontal-stretch: 1;
+                            wrap: word-wrap;
+                        }
+                        if Backend.web-index != Backend.kind-index - 1: Button {
+                            text: @tr("Use this web server");
+                            primary: Backend.installed-versions.length > 0;
+                            enabled: Backend.installed-versions.length > 0 && !Backend.busy;
+                            clicked => {
+                                Backend.set-web(Backend.kind-index - 1);
+                            }
+                        }
+                    }
                     Text {
                         text: @tr("Installed");
                         font-weight: 600;

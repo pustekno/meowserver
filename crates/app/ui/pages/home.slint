@@ -90,6 +90,20 @@ export component HomePage inherits VerticalLayout {
                 }
             }
 
+            if Backend.import-offered && !Backend.needs-setup: Card {
+                Text {
+                    text: @tr("Bring your projects here");
+                    font-size: 16px;
+                    font-weight: 600;
+                }
+                Text {
+                    text: @tr("This is what MeowServer would copy. Nothing changes until you press Import.");
+                    color: Theme.muted;
+                    wrap: word-wrap;
+                }
+                ImportChoices { }
+            }
+
             Card {
                 Text {
                     text: @tr("Services");

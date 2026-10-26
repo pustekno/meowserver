@@ -35,9 +35,13 @@ No ads. No telemetry. No account.
    your user only (no administrator rights) into `C:\MeowServer`, or a
    folder you choose. Prefer no installer? Unzip
    `MeowServer-<version>-windows-x86_64.zip` anywhere instead.
-2. Start MeowServer. On the Home page choose **Install recommended
-   stack** (Caddy, PHP, MySQL 8.4), or import from Laragon, XAMPP,
-   WampServer, or FlyEnv when one is found.
+   Setup asks for a web server (Caddy unless you prefer Nginx or Apache)
+   and a database (MySQL 8.4 unless you prefer MariaDB or PostgreSQL),
+   then downloads them with PHP and Composer from their official sources.
+2. Start MeowServer; it is ready. If Laragon, XAMPP, WampServer, or
+   FlyEnv was found, Home shows what would be imported. The zip, or a
+   setup run offline, offers **Install recommended stack** on Home
+   instead.
 3. Put a project in `www\`, or use **Sites → Add project**. Open
    `http://<name>.localhost`.
 

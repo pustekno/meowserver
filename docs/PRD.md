@@ -268,6 +268,20 @@ checksums for these, so they come only from downloads.php.net over HTTPS.
 macOS and Linux builds have their extensions compiled in.
 *Done when:* `new Imagick()` works after one click on a fresh PHP 8.4.
 
+**F48 — Ready when it first opens.** On a first install, Setup asks two
+questions: the web server (Caddy, recommended; Nginx; Apache) and the
+database (MySQL 8.4, as in Laragon; MariaDB; PostgreSQL; none). It then
+downloads them with the newest PHP and Composer from their official
+sources on its own progress page, checking each file's SHA-256 (the list
+comes from `meow setup plan`), and installs them before it finishes, so the
+window opens with everything ready to start. Offline, Setup finishes anyway
+and the window offers the same stack. When another tool is found (F27), the
+last page offers "Bring my projects and databases from Laragon"; the window
+then opens with the import plan, and nothing is copied until Import is
+pressed. Updates ask nothing. Installing another web server on the Versions
+page also makes it the one that serves the sites; the page says which one
+does and switches with one button.
+
 **F47 — Compile before the first visit.** The first visit to a Laravel
 site compiles thousands of `vendor` files (24 s measured on a cold
 OPcache). When PHP starts and when sites are added, MeowServer compiles
@@ -1320,6 +1334,7 @@ directly:
 | 2026-10-25 | Owner request: projects in other languages. Stage 1 done (F43): Node.js, Python (python-build-standalone, the builds uv uses), and Go, with detection, per-project versions, a port behind the site name, and dev servers started by hand only. Home lists every port of every service, as Laragon does. |
 | 2026-10-25 | Owner request: domain per project (default `.localhost`, `.test` where wanted; F15), several MySQL/MariaDB versions at once (F24), import copies projects stored inside the old tool and follows its links so the tool can be removed (F27), ports return once free (F41), and project needs read from composer.json and settings (F42). Found while testing: Inno Setup 6.7 enforces Windows' RedirectionGuard on Setup, and programs Setup starts inherit it and refuse junctions made without admin rights; Setup now starts MeowServer through Explorer, the window restarts itself through Explorer when it finds the guard, and Doctor reports it. |
 | 2026-10-25 | Owner request: a Windows installer for first install and updates that never deletes data. Inno Setup 6 (free for open source; the only build tool that is not Rust), per user without administrator rights, default `C:\MeowServer` because data lives next to the program; Program Files is refused. Updates replace only the program files; uninstall keeps `www`, `data`, `bin`, and settings. |
+| 2026-10-26 | Owner request after testing with an intern: MeowServer should be ready when it first opens. Setup now asks for the web server and database and downloads them (F48), offers the import from another tool, and installing a web server on the Versions page switches to it (the intern installed Nginx and the sites stayed on Caddy). |
 
 No open questions remain for v1.0 scope. New questions are added here as they
 come up.

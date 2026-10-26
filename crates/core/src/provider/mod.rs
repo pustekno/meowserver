@@ -19,21 +19,21 @@ mod python;
 pub mod xdebug;
 
 use anyhow::{Context, Result};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::http::Http;
 use crate::platform::{Os, os};
 use crate::service::Kind;
 use crate::version::Version;
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Release {
     pub version: Version,
     /// Usually one archive; PHP on macOS/Linux needs two (FPM and CLI).
     pub assets: Vec<Asset>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Asset {
     pub url: String,
     /// Official SHA-256, when upstream lists it with the version.
@@ -60,7 +60,7 @@ impl Asset {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Archive {
     Zip,

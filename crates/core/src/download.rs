@@ -37,14 +37,37 @@ pub struct Progress<'a> {
     pub on_bytes: &'a mut dyn FnMut(u64, Option<u64>),
 }
 
+/// Where an install takes its archives from.
+enum Source<'a> {
+    Download(&'a Http, Progress<'a>),
+    /// Already downloaded by the installer, named as [`file_name`] names
+    /// them, with the checksums [`crate::setup::plan`] resolved.
+    Folder(&'a Path),
+}
+
 /// Installs `release` for `service` and returns the installed folder.
-pub fn install(
+pub fn install<'a>(
     layout: &Layout,
-    http: &Http,
+    http: &'a Http,
     service: &str,
     release: &Release,
-    progress: Progress,
+    progress: Progress<'a>,
 ) -> Result<PathBuf> {
+    install_with(layout, service, release, Source::Download(http, progress))
+}
+
+/// Installs `release` from archives already in `folder` (the installer
+/// downloads them with its own progress bar). Checks them like a download.
+pub fn install_from_folder(
+    layout: &Layout,
+    service: &str,
+    release: &Release,
+    folder: &Path,
+) -> Result<PathBuf> {
+    install_with(layout, service, release, Source::Folder(folder))
+}
+
+fn install_with(layout: &Layout, service: &str, release: &Release, source: Source) -> Result<PathBuf> {
     let dest = layout.service_bin(service).join(release.version.to_string());
     if dest.exists() {
         bail!("{service} {} is already installed", release.version);
@@ -53,7 +76,7 @@ pub fn install(
     let _ = std::fs::remove_dir_all(&staging);
     std::fs::create_dir_all(&staging)?;
 
-    let result = install_into(layout, http, release, &staging, progress);
+    let result = install_into(layout, release, &staging, source);
     let sources = match result {
         Ok(sources) => sources,
         Err(e) => {
@@ -73,23 +96,33 @@ pub fn install(
 
 fn install_into(
     layout: &Layout,
-    http: &Http,
     release: &Release,
     staging: &Path,
-    progress: Progress,
+    mut source: Source,
 ) -> Result<Vec<ReceiptSource>> {
     let content = staging.join("content");
     std::fs::create_dir_all(&content)?;
     let mut sources = Vec::new();
     for asset in &release.assets {
-        (progress.on_asset)(asset);
-        let expected = match (&asset.sha256, &asset.sha256_url) {
-            (Some(h), _) => Some(h.clone()),
-            (None, Some(url)) => Some(crate::provider::fetch_checksum(http, url, asset.file_name())?),
-            (None, None) => None,
+        let (expected, file, sha256) = match &mut source {
+            Source::Download(http, progress) => {
+                (progress.on_asset)(asset);
+                let expected = match (&asset.sha256, &asset.sha256_url) {
+                    (Some(h), _) => Some(h.clone()),
+                    (None, Some(url)) => Some(crate::provider::fetch_checksum(http, url, asset.file_name())?),
+                    (None, None) => None,
+                };
+                let file = layout.tmp().join(file_name(&asset.url));
+                let sha256 = http.download(&asset.url, &file, progress.on_bytes);
+                (expected, file, sha256)
+            }
+            Source::Folder(folder) => {
+                let file = folder.join(file_name(&asset.url));
+                let sha256 =
+                    hash_file(&file).with_context(|| format!("{} was not downloaded", file.display()));
+                (asset.sha256.clone(), file, sha256)
+            }
         };
-        let file = layout.tmp().join(file_name(&asset.url));
-        let sha256 = http.download(&asset.url, &file, progress.on_bytes);
         let sha256 = match sha256 {
             Ok(h) => h,
             Err(e) => {
@@ -117,7 +150,24 @@ fn install_into(
     Ok(sources)
 }
 
-fn file_name(url: &str) -> String {
+fn hash_file(path: &Path) -> Result<String> {
+    use sha2::{Digest, Sha256};
+    use std::io::Read;
+    let mut hasher = Sha256::new();
+    let mut file = File::open(path)?;
+    let mut buf = vec![0u8; 256 * 1024];
+    loop {
+        let n = file.read(&mut buf)?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
+    Ok(hasher.finalize().iter().map(|b| format!("{b:02x}")).collect())
+}
+
+/// The name an archive is saved under: the URL's last part, made safe.
+pub fn file_name(url: &str) -> String {
     let name = url.rsplit('/').next().unwrap_or("download");
     let name: String = name.chars().filter(|c| c.is_ascii_alphanumeric() || "._-".contains(*c)).collect();
     if name.is_empty() { "download".into() } else { name }

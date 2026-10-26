@@ -118,6 +118,8 @@ export global Backend {
     in property <string> import-plan;
     // The tool's database server is running, so its data cannot be copied.
     in property <bool> import-blocked;
+    // The installer offered an import: Home shows its plan once set up.
+    in property <bool> import-offered;
     in property <string> localhost-url;
     in property <string> setup-progress;
 

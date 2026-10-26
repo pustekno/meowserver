@@ -35,9 +35,13 @@ Tanpa iklan. Tanpa telemetri. Tanpa akun.
    untuk user kamu saja (tanpa hak admin) ke `C:\MeowServer`, atau folder
    pilihanmu. Tidak mau pakai installer? Ekstrak
    `MeowServer-<versi>-windows-x86_64.zip` ke mana saja.
-2. Jalankan MeowServer. Di Beranda pilih **Pasang paket yang
-   disarankan** (Caddy, PHP, MySQL 8.4), atau impor dari Laragon, XAMPP,
-   WampServer, atau FlyEnv jika ditemukan.
+   Setup menanyakan web server (Caddy, atau Nginx/Apache bila lebih suka)
+   dan database (MySQL 8.4, atau MariaDB/PostgreSQL), lalu mengunduhnya
+   bersama PHP dan Composer dari sumber resminya.
+2. Jalankan MeowServer; sudah siap. Jika Laragon, XAMPP, WampServer, atau
+   FlyEnv ditemukan, Beranda menampilkan apa yang akan diimpor. Versi zip,
+   atau setup yang dijalankan saat offline, menawarkan **Pasang paket yang
+   disarankan** di Beranda.
 3. Taruh proyek di `www\`, atau pakai **Situs → Tambah proyek**. Buka
    `http://<nama>.localhost`.
 

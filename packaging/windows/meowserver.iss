@@ -81,6 +81,32 @@ en.NotProgramFiles=MeowServer keeps your databases and downloads in its own fold
 id.NotProgramFiles=MeowServer menyimpan database dan unduhan di foldernya sendiri, jadi tidak bisa dipasang di Program Files. Pilih folder seperti C:\MeowServer.
 en.KeptData=Your projects, databases, and downloaded versions were kept in:%n%1%n%nDelete that folder yourself if you no longer need them.
 id.KeptData=Proyek, database, dan versi yang sudah diunduh tetap disimpan di:%n%1%n%nHapus folder itu sendiri jika sudah tidak diperlukan.
+en.WebTitle=Web server
+id.WebTitle=Web server
+en.WebDesc=Which web server should serve your sites?
+id.WebDesc=Web server mana yang melayani situs-situsmu?
+en.WebSub=Caddy is the simplest choice. You can switch later in Settings.
+id.WebSub=Caddy pilihan paling mudah. Bisa diganti nanti di Pengaturan.
+en.Recommended=recommended
+id.Recommended=disarankan
+en.DbTitle=Database
+id.DbTitle=Database
+en.DbDesc=Which database server should MeowServer set up?
+id.DbDesc=Database apa yang disiapkan MeowServer?
+en.DbSub=MySQL 8.4 is what Laragon uses. Others can be added later on the Versions page.
+id.DbSub=MySQL 8.4 sama dengan yang dipakai Laragon. Yang lain bisa ditambah nanti di halaman Versi.
+en.LikeLaragon=like Laragon
+id.LikeLaragon=seperti Laragon
+en.NoDatabase=None for now
+id.NoDatabase=Tidak usah dulu
+en.Downloading=Downloading the web server, PHP, and database from their official sources
+id.Downloading=Mengunduh web server, PHP, dan database dari sumber resminya
+en.Preparing=Preparing MeowServer (unpacking PHP and the database)...
+id.Preparing=Menyiapkan MeowServer (mengekstrak PHP dan database)...
+en.Offline=MeowServer could not download its parts (%1).%n%nIt is installed anyway: open it and press Install recommended stack when you are online.
+id.Offline=MeowServer tidak bisa mengunduh komponennya (%1).%n%nMeowServer tetap terpasang: buka lalu tekan Pasang paket yang disarankan saat online.
+en.BringProjects=Bring my projects and databases from %1 (shown when MeowServer opens)
+id.BringProjects=Pindahkan proyek dan database dari %1 (ditampilkan saat MeowServer dibuka)
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
@@ -104,6 +130,8 @@ Name: "{autodesktop}\MeowServer"; Filename: "{app}\meowserver.exe"; IconFilename
 ; Through Explorer, not as Setup's child: Setup enforces Windows' RedirectionGuard
 ; on itself, and a child would inherit it and refuse the folder links (junctions)
 ; Laragon users keep their projects behind.
+; Before the window opens, so it shows the import plan right away.
+Filename: "{app}\meow.exe"; Parameters: "setup offer-import {code:ImportTool}"; Description: "{code:ImportText}"; Flags: postinstall runhidden skipifsilent; Check: ImportFound
 Filename: "{win}\explorer.exe"; Parameters: """{app}\meowserver.exe"""; Description: "{cm:LaunchProgram,MeowServer}"; Flags: nowait postinstall skipifsilent
 ; An update started from MeowServer's window runs silently: open it again.
 Filename: "{win}\explorer.exe"; Parameters: """{app}\meowserver.exe"""; Flags: nowait; Check: WizardSilent
@@ -115,6 +143,160 @@ Filename: "{app}\meow.exe"; Parameters: "undo-system-changes"; Flags: runhidden 
 [Code]
 const
   EnvKey = 'Environment';
+
+var
+  WebPage, DbPage: TInputOptionWizardPage;
+  DownloadPage: TDownloadWizardPage;
+  // Components were downloaded and wait for `meow setup apply`.
+  SetupReady: Boolean;
+  ImportId, ImportName: String;
+
+// MeowServer is already set up in the chosen folder: an update, which
+// keeps what is installed and asks nothing about it.
+function IsUpdate: Boolean;
+begin
+  Result := DirExists(AddBackslash(WizardDirValue) + 'bin\php');
+end;
+
+procedure InitializeWizard;
+begin
+  WebPage := CreateInputOptionPage(wpSelectTasks, CustomMessage('WebTitle'), CustomMessage('WebDesc'),
+    CustomMessage('WebSub'), True, False);
+  WebPage.Add('Caddy (' + CustomMessage('Recommended') + ')');
+  WebPage.Add('Nginx');
+  WebPage.Add('Apache');
+  WebPage.SelectedValueIndex := 0;
+  DbPage := CreateInputOptionPage(WebPage.ID, CustomMessage('DbTitle'), CustomMessage('DbDesc'),
+    CustomMessage('DbSub'), True, False);
+  DbPage.Add('MySQL 8.4 (' + CustomMessage('LikeLaragon') + ')');
+  DbPage.Add('MariaDB');
+  DbPage.Add('PostgreSQL');
+  DbPage.Add(CustomMessage('NoDatabase'));
+  DbPage.SelectedValueIndex := 0;
+  DownloadPage := CreateDownloadPage(CustomMessage('Downloading'), '', nil);
+end;
+
+function ShouldSkipPage(PageID: Integer): Boolean;
+begin
+  Result := ((PageID = WebPage.ID) or (PageID = DbPage.ID)) and IsUpdate;
+end;
+
+function WebChoice: String;
+begin
+  case WebPage.SelectedValueIndex of
+    1: Result := 'nginx';
+    2: Result := 'apache';
+  else
+    Result := 'caddy';
+  end;
+end;
+
+function DbChoice: String;
+begin
+  case DbPage.SelectedValueIndex of
+    1: Result := 'mariadb';
+    2: Result := 'postgres';
+    3: Result := 'none';
+  else
+    Result := 'mysql';
+  end;
+end;
+
+// Asks meow.exe (unpacked to {tmp}) what to download, then downloads it
+// on Setup's own page, which checks each file's SHA-256. Offline, Setup
+// carries on and the window offers the same later.
+function DownloadComponents: Boolean;
+var
+  Code, I, Tab1, Tab2: Integer;
+  Lines: TArrayOfString;
+  Line, Url, Name, Sha: String;
+begin
+  Result := True;
+  ExtractTemporaryFile('meow.exe');
+  if not Exec(ExpandConstant('{tmp}\meow.exe'),
+      'setup plan --web ' + WebChoice + ' --db ' + DbChoice + ' --out "' + ExpandConstant('{tmp}') + '"',
+      '', SW_HIDE, ewWaitUntilTerminated, Code) or (Code <> 0)
+      or not LoadStringsFromFile(ExpandConstant('{tmp}\downloads.txt'), Lines) then
+  begin
+    SuppressibleMsgBox(FmtMessage(CustomMessage('Offline'), ['meow setup plan']), mbInformation, MB_OK, IDOK);
+    Exit;
+  end;
+  DownloadPage.Clear;
+  for I := 0 to GetArrayLength(Lines) - 1 do
+  begin
+    // url <TAB> file name <TAB> sha256 (empty when upstream publishes none)
+    Line := Lines[I];
+    Tab1 := Pos(#9, Line);
+    if Tab1 = 0 then
+      Continue;
+    Url := Copy(Line, 1, Tab1 - 1);
+    Line := Copy(Line, Tab1 + 1, MaxInt);
+    Tab2 := Pos(#9, Line);
+    if Tab2 = 0 then
+    begin
+      Name := Line;
+      Sha := '';
+    end else
+    begin
+      Name := Copy(Line, 1, Tab2 - 1);
+      Sha := Trim(Copy(Line, Tab2 + 1, MaxInt));
+    end;
+    DownloadPage.Add(Url, Name, Sha);
+  end;
+  DownloadPage.Show;
+  try
+    try
+      DownloadPage.Download;
+      SetupReady := True;
+    except
+      if DownloadPage.AbortedByUser then
+        Log('Downloads cancelled by the user.')
+      else
+        SuppressibleMsgBox(FmtMessage(CustomMessage('Offline'), [GetExceptionMessage]), mbInformation, MB_OK, IDOK);
+    end;
+  finally
+    DownloadPage.Hide;
+  end;
+end;
+
+// The first other tool with projects or databases, as `meow import
+// --detect` lists them: id <TAB> name <TAB> folder.
+procedure DetectImport;
+var
+  Code, Tab1: Integer;
+  Output: TExecOutput;
+  Line: String;
+begin
+  ImportId := '';
+  if not ExecAndCaptureOutput(ExpandConstant('{app}\meow.exe'), 'import --detect', '', SW_HIDE,
+      ewWaitUntilTerminated, Code, Output) or (Code <> 0) or (GetArrayLength(Output.StdOut) = 0) then
+    Exit;
+  Line := Output.StdOut[0];
+  Tab1 := Pos(#9, Line);
+  if Tab1 = 0 then
+    Exit;
+  ImportId := Copy(Line, 1, Tab1 - 1);
+  Line := Copy(Line, Tab1 + 1, MaxInt);
+  if Pos(#9, Line) > 0 then
+    ImportName := Copy(Line, 1, Pos(#9, Line) - 1)
+  else
+    ImportName := Line;
+end;
+
+function ImportFound: Boolean;
+begin
+  Result := ImportId <> '';
+end;
+
+function ImportTool(Param: String): String;
+begin
+  Result := ImportId;
+end;
+
+function ImportText(Param: String): String;
+begin
+  Result := FmtMessage(CustomMessage('BringProjects'), [ImportName]);
+end;
 
 function SameDir(A, B: String): Boolean;
 begin
@@ -176,6 +358,8 @@ end;
 function NextButtonClick(CurPageID: Integer): Boolean;
 begin
   Result := True;
+  if (CurPageID = wpReady) and not IsUpdate and not WizardSilent then
+    DownloadComponents;
   if (CurPageID = wpSelectDir) and
      (InFolder(WizardDirValue, ExpandConstant('{commonpf64}')) or
       InFolder(WizardDirValue, ExpandConstant('{commonpf32}'))) then
@@ -210,9 +394,23 @@ begin
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
+var
+  Code: Integer;
 begin
   if CurStep = ssPostInstall then
+  begin
     SetOnPath(ExpandConstant('{app}'), WizardIsTaskSelected('path'));
+    if SetupReady then
+    begin
+      WizardForm.StatusLabel.Caption := CustomMessage('Preparing');
+      if not Exec(ExpandConstant('{app}\meow.exe'), 'setup apply --from "' + ExpandConstant('{tmp}') + '"', '',
+          SW_HIDE, ewWaitUntilTerminated, Code) or (Code <> 0) then
+        SuppressibleMsgBox(FmtMessage(CustomMessage('Offline'), ['meow setup apply']), mbInformation, MB_OK, IDOK);
+    end;
+    // Offer an import only on a first install.
+    if not WizardSilent and (SetupReady or not IsUpdate) then
+      DetectImport;
+  end;
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);

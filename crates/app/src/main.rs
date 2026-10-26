@@ -204,6 +204,11 @@ fn main() -> Result<()> {
     run_doctor(&ui);
     detect_importers(&ui);
     load_pecl_index(&ui);
+    // The installer's "Bring my projects from Laragon" (PRD F48).
+    if let Some(tool) = meow_core::setup::take_import_offer(&layout) {
+        b.set_import_offered(true);
+        b.invoke_preview_import(tool.into());
+    }
 
     // Keep the view current while someone looks at it; do nothing while
     // the window is minimized (PRD §8.1: no busy work when idle).
@@ -373,7 +378,9 @@ fn wire(window: &AppWindow, ui: &Ui) {
         move || {
             let Some((tool, root)) = pending.lock().unwrap().take() else { return };
             if let Some(w) = weak.upgrade() {
-                w.global::<Backend>().set_import_plan(SharedString::new());
+                let b = w.global::<Backend>();
+                b.set_import_plan(SharedString::new());
+                b.set_import_offered(false);
             }
             ui.run(move |layout, ui| actions::import_from(layout, ui, tool, &root))
         }
@@ -383,7 +390,9 @@ fn wire(window: &AppWindow, ui: &Ui) {
         move || {
             pending.lock().unwrap().take();
             if let Some(w) = weak.upgrade() {
-                w.global::<Backend>().set_import_plan(SharedString::new());
+                let b = w.global::<Backend>();
+                b.set_import_plan(SharedString::new());
+                b.set_import_offered(false);
             }
         }
     });
@@ -628,6 +637,20 @@ fn wire(window: &AppWindow, ui: &Ui) {
             let weak = weak.clone();
             ui.run(move |l, ui| {
                 let installed = actions::install(l, ui, kind, Some(&version))?;
+                // Installing another web server means wanting to use it;
+                // keeping the old one confused people (Settings switches back).
+                let switched = web_server(kind).is_some_and(|server| {
+                    Config::load(l).is_ok_and(|c| c.general.web_server != server)
+                        && edit_config(l, |c| {
+                            c.general.web_server = server;
+                            Ok(())
+                        })
+                        .is_ok()
+                });
+                if switched {
+                    actions::reload(l);
+                    ui.refresh();
+                }
                 let weak = weak.clone();
                 let layout = l.clone();
                 ui.on_ui(move |_| {
@@ -636,7 +659,11 @@ fn wire(window: &AppWindow, ui: &Ui) {
                         load_php(&w, &layout);
                     }
                 });
-                Ok(format!("{} {installed} {}", snapshot::title(kind), t("installed.")))
+                let mut text = format!("{} {installed} {}", snapshot::title(kind), t("installed."));
+                if switched {
+                    text = format!("{text} {}", t("MeowServer now serves your sites with it."));
+                }
+                Ok(text)
             });
         }
     });
@@ -798,8 +825,8 @@ fn wire(window: &AppWindow, ui: &Ui) {
     b.on_set_web({
         let ui = ui.clone();
         move |index| {
-            let server = [WebServer::Caddy, WebServer::Nginx, WebServer::Apache][index.clamp(0, 2) as usize];
             let kind = [Kind::Caddy, Kind::Nginx, Kind::Apache][index.clamp(0, 2) as usize];
+            let Some(server) = web_server(kind) else { return };
             if service::installed(&ui.layout, kind).is_empty() {
                 ui.message(
                     format!(
@@ -1228,6 +1255,15 @@ fn validate_add(w: &AppWindow, layout: &Layout) {
 
 fn selected_kind(w: &AppWindow) -> Kind {
     KINDS[w.global::<Backend>().get_kind_index().clamp(0, KINDS.len() as i32 - 1) as usize]
+}
+
+fn web_server(kind: Kind) -> Option<WebServer> {
+    match kind {
+        Kind::Caddy => Some(WebServer::Caddy),
+        Kind::Nginx => Some(WebServer::Nginx),
+        Kind::Apache => Some(WebServer::Apache),
+        _ => None,
+    }
 }
 
 fn load_versions(w: &AppWindow, layout: &Layout) {

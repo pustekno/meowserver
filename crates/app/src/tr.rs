@@ -109,6 +109,7 @@ pub fn t(text: &str) -> String {
         }
         "installed." => "terpasang.",
         "is now active." => "sekarang aktif.",
+        "MeowServer now serves your sites with it." => "MeowServer sekarang melayani situsmu dengannya.",
         "Removed" => "Dihapus",
         "Folders excluded from Defender scanning." => "Folder dikecualikan dari pemindaian Defender.",
         "Not changed: administrator rights were declined." => "Tidak diubah: hak admin ditolak.",

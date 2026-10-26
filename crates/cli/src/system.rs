@@ -76,6 +76,64 @@ pub enum DefenderAction {
     Show,
 }
 
+#[derive(Subcommand)]
+pub enum SetupAction {
+    /// Resolve the downloads into <out>: plan.json and downloads.txt.
+    Plan {
+        /// caddy, nginx, or apache.
+        #[arg(long, default_value = "caddy")]
+        web: String,
+        /// mysql, mariadb, postgres, or none.
+        #[arg(long, default_value = "mysql")]
+        db: String,
+        #[arg(long)]
+        out: PathBuf,
+    },
+    /// Install what <from>/plan.json lists from the files downloaded there.
+    Apply {
+        #[arg(long)]
+        from: PathBuf,
+    },
+    /// Open the import plan for TOOL when the window first starts.
+    OfferImport { tool: String },
+}
+
+pub fn setup(layout: &Layout, action: SetupAction) -> Result<()> {
+    use meow_core::config::WebServer;
+    use meow_core::service::Kind;
+    use meow_core::setup;
+    match action {
+        SetupAction::Plan { web, db, out } => {
+            let web = match web.as_str() {
+                "caddy" => WebServer::Caddy,
+                "nginx" => WebServer::Nginx,
+                "apache" => WebServer::Apache,
+                other => bail!("unknown web server {other:?}"),
+            };
+            let database = match db.as_str() {
+                "none" => None,
+                id => Some(
+                    Kind::from_id(id)
+                        .filter(|k| matches!(k, Kind::Mysql | Kind::Mariadb | Kind::Postgres))
+                        .with_context(|| format!("unknown database {id:?}"))?,
+                ),
+            };
+            let steps = setup::plan(&meow_core::http::Http::new(), &setup::Choices { web, database })?;
+            setup::write_plan(&steps, &out)?;
+            for s in &steps {
+                println!("{} {}", s.kind.id(), s.release.version);
+            }
+        }
+        SetupAction::Apply { from } => {
+            for note in setup::apply(layout, &from)? {
+                println!("{note}");
+            }
+        }
+        SetupAction::OfferImport { tool } => setup::offer_import(layout, &tool)?,
+    }
+    Ok(())
+}
+
 #[derive(clap::Args)]
 pub struct ImportArgs {
     /// laragon, xampp, wamp, or flyenv. Without it, the one tool found is
@@ -97,6 +155,9 @@ pub struct ImportArgs {
     /// leaves its MySQL running.
     #[arg(long)]
     stop: bool,
+    /// Only list the tools found, as `id<TAB>name<TAB>folder` (for the installer).
+    #[arg(long, conflicts_with = "tool")]
+    detect: bool,
 }
 
 #[derive(Subcommand)]
@@ -436,7 +497,13 @@ pub fn defender(layout: &Layout, action: DefenderAction) -> Result<()> {
 }
 
 pub fn import(layout: &Layout, args: ImportArgs) -> Result<()> {
-    let ImportArgs { tool, path, in_place, dry_run, yes, stop } = args;
+    let ImportArgs { tool, path, in_place, dry_run, yes, stop, detect } = args;
+    if detect {
+        for s in import::detect_all() {
+            println!("{}\t{}\t{}", s.tool.id(), s.tool.name(), s.root.display());
+        }
+        return Ok(());
+    }
     let source = match tool.as_deref() {
         None | Some("auto") => {
             let mut found = import::detect_all();

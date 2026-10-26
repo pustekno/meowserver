@@ -61,6 +61,21 @@ msgstr "Pasang paket yang disarankan"
 msgid "Import from {}"
 msgstr "Impor dari {}"
 
+msgid "Bring your projects here"
+msgstr "Pindahkan proyekmu ke sini"
+
+msgid "This is what MeowServer would copy. Nothing changes until you press Import."
+msgstr "Ini yang akan disalin MeowServer. Belum ada yang berubah sampai kamu menekan Impor."
+
+msgid "MeowServer serves your sites with this web server."
+msgstr "MeowServer melayani situsmu dengan web server ini."
+
+msgid "Your sites are served by {} now."
+msgstr "Situsmu sekarang dilayani oleh {}."
+
+msgid "Use this web server"
+msgstr "Pakai web server ini"
+
 msgid "Import"
 msgstr "Impor"
 

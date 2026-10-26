@@ -27,6 +27,7 @@ pub mod platform;
 pub mod provider;
 pub mod report;
 pub mod service;
+pub mod setup;
 pub mod site;
 pub mod supervisor;
 pub mod system;
