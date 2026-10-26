@@ -68,3 +68,14 @@ pub fn sites(sites: &[Site], warnings: &[String], web_port: u16) {
 pub fn site_url(host: &str, web_port: u16) -> String {
     if web_port == 80 { format!("http://{host}") } else { format!("http://{host}:{web_port}") }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn site_url_shows_a_port_other_than_80() {
+        assert_eq!(site_url("blog.localhost", 80), "http://blog.localhost");
+        assert_eq!(site_url("blog.localhost", 8080), "http://blog.localhost:8080");
+    }
+}

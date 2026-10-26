@@ -66,14 +66,16 @@ pub fn new_project(layout: &Layout, template: &str, name: &str, package: Option<
     let dir = meow_core::create::create(layout, &template, name, &mut |text| println!("{text}"))?;
     let config = Config::load(layout)?;
     let slug = site::slugify(name).unwrap_or_default();
-    println!("Created {} → http://{slug}.{}", dir.display(), config.general.suffix.as_str());
+    let host = format!("{slug}.{}", config.general.suffix.as_str());
+    println!("Created {} → {}", dir.display(), print::site_url(&host, config.port("web", 80)));
     daemon::reload_if_running(layout)
 }
 
 pub fn link(layout: &Layout, path: &Path, name: Option<&str>) -> Result<()> {
     edit(layout, |config| {
         let name = manage::link(layout, config, path, name)?;
-        Ok(format!("Serving {} at http://{name}.{}", path.display(), config.general.suffix.as_str()))
+        let host = format!("{name}.{}", config.general.suffix.as_str());
+        Ok(format!("Serving {} at {}", path.display(), print::site_url(&host, config.port("web", 80))))
     })
 }
 
