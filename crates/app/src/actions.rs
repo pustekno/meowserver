@@ -67,6 +67,34 @@ pub fn install(layout: &Layout, ui: &Ui, kind: Kind, selector: Option<&str>) -> 
 
 /// The first-run stack (PRD §6.1): Caddy, the newest PHP, MySQL 8.4,
 /// Composer; then start everything.
+/// Starts `unit` from its switch on Home, downloading its program first
+/// when none is installed yet (MySQL as 8.4, like the recommended stack).
+pub fn start_unit(layout: &Layout, ui: &Ui, unit: &str) -> Result<String> {
+    let config = Config::load(layout)?;
+    let kind = match unit {
+        "web" => service::web::kind(&config),
+        id => Kind::from_id(id).with_context(|| format!("unknown service {id:?}"))?,
+    };
+    let mut note = String::new();
+    if service::select(layout, kind, config.version_selector(kind.id())).is_none() {
+        let pinned = config.version_selector(kind.id()).map(str::to_owned);
+        let selector = pinned.clone().or_else(|| (kind == Kind::Mysql).then(|| "8.4".to_owned()));
+        let version = install(layout, ui, kind, selector.as_deref())?;
+        if pinned.is_none()
+            && let Some(line) = selector
+        {
+            let mut config = Config::load(layout)?;
+            config.versions.insert(kind.id().into(), line);
+            config.save(layout)?;
+        }
+        note = format!("{} {version} {}", crate::snapshot::title(kind), t("installed and started."));
+        ui.progress(t("Starting…"));
+    }
+    let result = call(layout, Request::Start { unit: unit.into() });
+    ui.progress(String::new());
+    result.map(|()| note)
+}
+
 pub fn quick_setup(layout: &Layout, ui: &Ui) -> Result<()> {
     install(layout, ui, Kind::Caddy, None)?;
     install(layout, ui, Kind::Php, None)?;

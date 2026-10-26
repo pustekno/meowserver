@@ -259,12 +259,15 @@ fn wire(window: &AppWindow, ui: &Ui) {
         let ui = ui.clone();
         move |unit| {
             let unit = unit.to_string();
-            ui.run(move |l, _| {
+            ui.run(move |l, ui| {
                 let snap = snapshot::take(l);
                 let on = snap.services.iter().any(|s| s.unit.id() == unit && s.running)
                     || snap.databases.iter().any(|d| d.unit.id() == unit && d.running);
-                let request = if on { Request::Stop { unit } } else { Request::Start { unit } };
-                actions::call(l, request).map(|()| String::new())
+                if on {
+                    actions::call(l, Request::Stop { unit }).map(|()| String::new())
+                } else {
+                    actions::start_unit(l, ui, &unit)
+                }
             })
         }
     });

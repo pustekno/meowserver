@@ -280,7 +280,9 @@ last page offers "Bring my projects and databases from Laragon"; the window
 then opens with the import plan, and nothing is copied until Import is
 pressed. Updates ask nothing. Installing another web server on the Versions
 page also makes it the one that serves the sites; the page says which one
-does and switches with one button.
+does and switches with one button. Home lists every service that can be
+downloaded, installed or not; turning on one that is not installed
+downloads it first (MySQL as 8.4), then starts it.
 
 **F47 — Compile before the first visit.** The first visit to a Laravel
 site compiles thousands of `vendor` files (24 s measured on a cold

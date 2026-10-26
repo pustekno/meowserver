@@ -205,11 +205,15 @@ pub fn take(layout: &Layout) -> Snapshot {
     ];
     for (unit, kind, name, port) in rows {
         let version = active(kind).map(|v| v.to_string());
-        // Hide optional services nobody installed; always show the core three.
-        if version.is_none() && !matches!(unit, Unit::Web | Unit::Php | Unit::Mysql) {
+        // Not installed: listed when it can be downloaded, as its switch
+        // downloads it first.
+        if version.is_none() && meow_core::provider::for_service(kind).is_none() {
             continue;
         }
-        let (state, running, failed) = state_of(unit);
+        let (mut state, running, failed) = state_of(unit);
+        if version.is_none() && !failed {
+            state = t("turn on to download");
+        }
         services.push(ServiceInfo { unit, name, version, port, state, running, failed });
     }
 

@@ -145,7 +145,7 @@ export component HomePage inherits VerticalLayout {
                         color: s.failed ? Theme.bad : Theme.muted;
                     }
                     Switch {
-                        enabled: s.installed && !Backend.busy;
+                        enabled: !Backend.busy;
                         checked: s.running;
                         accessible-label: s.name;
                         toggled => {

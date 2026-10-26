@@ -108,6 +108,8 @@ pub fn t(text: &str) -> String {
             "Dipercaya. Mulai ulang browser jika sedang terbuka."
         }
         "installed." => "terpasang.",
+        "installed and started." => "terpasang dan dijalankan.",
+        "turn on to download" => "nyalakan untuk mengunduh",
         "is now active." => "sekarang aktif.",
         "MeowServer now serves your sites with it." => "MeowServer sekarang melayani situsmu dengannya.",
         "Removed" => "Dihapus",
