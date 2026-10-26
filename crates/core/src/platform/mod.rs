@@ -105,6 +105,24 @@ pub fn processes_in(root: &std::path::Path, stems: &[&str]) -> Vec<(u32, String)
         .collect()
 }
 
+/// Processes named one of `stems` (without `.exe`), as (pid, executable
+/// path, or the name when the path is unknown).
+pub fn processes_named(stems: &[&str]) -> Vec<(u32, String)> {
+    imp::process_names()
+        .into_iter()
+        .filter(|(_, name)| {
+            let lower = name.to_ascii_lowercase();
+            stems.contains(&lower.strip_suffix(".exe").unwrap_or(&lower))
+        })
+        .map(|(pid, name)| (pid, imp::process_path(pid).unwrap_or(name)))
+        .collect()
+}
+
+/// How a process was started, where the OS tells (macOS and Linux).
+pub fn command_line(pid: u32) -> Option<String> {
+    imp::command_line(pid)
+}
+
 /// Ends a process at once (Windows) or asks it to end (`SIGTERM`).
 pub fn terminate(pid: u32) {
     imp::terminate(pid);

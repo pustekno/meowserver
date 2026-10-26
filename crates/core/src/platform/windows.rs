@@ -227,6 +227,12 @@ pub fn listener_pids(port: u16) -> Vec<u32> {
 }
 
 /// Full path of a process's executable, when we are allowed to see it.
+/// Not needed on Windows: services end with `meowd` (Job Object), and a
+/// version folder is not linked to a build elsewhere.
+pub fn command_line(_pid: u32) -> Option<String> {
+    None
+}
+
 pub fn process_path(pid: u32) -> Option<String> {
     use windows_sys::Win32::System::Threading::{
         OpenProcess, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW,

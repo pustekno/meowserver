@@ -95,7 +95,10 @@ impl Engine {
             "redis-server",
             "mailpit",
         ];
-        let strays = platform::processes_in(&self.layout.root().join("bin"), SERVICES);
+        let strays: Vec<(u32, String)> = platform::processes_named(SERVICES)
+            .into_iter()
+            .filter(|(pid, exe)| self.is_ours(*pid, exe))
+            .collect();
         for (pid, path) in &strays {
             log::warn!("ending {path} (pid {pid}), left running by an earlier MeowServer");
             platform::terminate(*pid);
@@ -365,6 +368,25 @@ impl Engine {
         ))
     }
 
+    /// A process of this MeowServer folder: its program is inside the
+    /// folder, or it was started with the folder's settings. The second
+    /// covers a build linked into bin/ (a Homebrew keg), whose executable
+    /// the OS reports at the link's target, outside the folder.
+    fn is_ours(&self, pid: u32, exe: &str) -> bool {
+        let root = self.layout.root();
+        if platform::is_inside(exe, root) {
+            return true;
+        }
+        let Some(line) = platform::command_line(pid) else { return false };
+        let real = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+        [root, real.as_path()].iter().any(|r| {
+            let r = r.to_string_lossy();
+            // Followed by a separator: not another folder whose name
+            // starts the same (MeowServer2).
+            line.contains(&format!("{r}/")) || line.contains(&format!("{r}\\"))
+        })
+    }
+
     /// Programs from outside this MeowServer folder listening on `port`.
     fn foreign_owners(&self, port: u16) -> Vec<String> {
         name_owners(self.foreign_processes(port))
@@ -387,10 +409,7 @@ impl Engine {
     }
 
     fn foreign_processes(&self, port: u16) -> Vec<(u32, String)> {
-        platform::port_owners(port)
-            .into_iter()
-            .filter(|(_, exe)| !platform::is_inside(exe, self.layout.root()))
-            .collect()
+        platform::port_owners(port).into_iter().filter(|(pid, exe)| !self.is_ours(*pid, exe)).collect()
     }
 
     /// When another program (Laragon's MySQL, another server on port 80,

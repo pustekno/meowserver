@@ -91,6 +91,13 @@ pub fn process_path(pid: u32) -> Option<String> {
     (!name.is_empty()).then_some(name)
 }
 
+/// The command line as started (`-ww`: not cut to the terminal's width).
+pub fn command_line(pid: u32) -> Option<String> {
+    let out = Command::new("ps").args(["-ww", "-p", &pid.to_string(), "-o", "command="]).output().ok()?;
+    let line = String::from_utf8_lossy(&out.stdout).trim().to_owned();
+    (!line.is_empty()).then_some(line)
+}
+
 #[cfg(target_os = "macos")]
 fn executable(pid: u32) -> Option<String> {
     let mut buf = vec![0u8; libc::PROC_PIDPATHINFO_MAXSIZE as usize];
