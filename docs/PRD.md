@@ -1261,7 +1261,7 @@ or another OS).
 | 1 — Core on Windows | Done. |
 | 2 — GUI | Done, except drag-and-drop of folders (Slint 1.18 has no drop events) and a step-by-step first-run wizard (the Home page offers "Install recommended stack" and an import for each tool found instead). |
 | 3 — Completeness | Done, with the "Built" items below. |
-| 4 — macOS and Linux | Not started beyond compiling: `core` and `meow` type-check for Linux and macOS, `meowd` and the window for macOS. No system-binary support (F4), installers, or signing yet. |
+| 4 — macOS and Linux | macOS (Apple silicon, 2026-10-26): the CLI, `meowd` with its tray, and the window run; Caddy, PHP (static-php-cli "bulk"), Mailpit, Composer, Adminer, and phpMyAdmin download and run; a MySQL linked from Homebrew runs beside Homebrew's own; recovery after `meowd` is killed tested. Binding a port below 1024 to 127.0.0.1 needs root on macOS, so the web server moves to 8080 and 8443 unless LAN access is on. `meowd` uses about 48 MB of RAM on macOS. Linux: `core` and `meow` type-check only. No system-binary support (F4), installers, or signing yet. |
 
 | Feature | State | Feature | State |
 |---|---|---|---|

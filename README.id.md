@@ -9,8 +9,12 @@ Tanpa iklan. Tanpa telemetri. Tanpa akun.
 [English](README.md)
 
 > **Status: pra-rilis.** Semua fitur di bawah sudah jalan dan diuji di
-> Windows 11. Build macOS dan Linux sudah bisa dikompilasi tapi belum
-> dijalankan. Lihat [`docs/PRD.md`](docs/PRD.md) §16.
+> Windows 11. Di macOS (Apple silicon), build dari source menjalankan
+> Caddy, PHP, dan Mailpit yang diunduhnya; MySQL, MariaDB, Nginx, Apache,
+> PostgreSQL, dan Redis belum bisa diunduh di sana, tapi build yang
+> ditautkan ke `bin/<layanan>/<versi>/` (misalnya dari Homebrew) dipakai.
+> Build Linux sudah bisa dikompilasi tapi belum dijalankan. Lihat
+> [`docs/PRD.md`](docs/PRD.md) §16.
 
 ## Unduh
 
@@ -83,7 +87,7 @@ Versi zip portable, atau setup yang dijalankan saat offline, menawarkan
 
 **Kecil dan menjaga privasi**
 - Unduhan hanya dari sumber resmi, dengan checksum diverifikasi.
-- Ikon tray (±14 MB RAM) dan jendela native yang kecil. Tanpa Electron,
+- Ikon tray (±14 MB RAM di Windows) dan jendela native yang kecil. Tanpa Electron,
   tanpa webview. Program bantu berjalan tanpa jendela CMD.
 
 ## Database

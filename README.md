@@ -9,8 +9,12 @@ No ads. No telemetry. No account.
 [Bahasa Indonesia](README.id.md)
 
 > **Status: pre-release.** Everything below works and is tested on
-> Windows 11. macOS and Linux builds compile but have not been run yet.
-> See [`docs/PRD.md`](docs/PRD.md) §16 for the plan.
+> Windows 11. On macOS (Apple silicon) a build from source runs Caddy,
+> PHP, and Mailpit, which it downloads; MySQL, MariaDB, Nginx, Apache,
+> PostgreSQL, and Redis have no download there yet, but a build linked
+> into `bin/<service>/<version>/` (e.g. from Homebrew) is used. Linux
+> builds compile but have not been run yet. See
+> [`docs/PRD.md`](docs/PRD.md) §16 for the plan.
 
 ## Download
 
@@ -81,7 +85,7 @@ stack** on Home instead.
 
 **Small and private**
 - Downloads come from official sources only, with checksums verified.
-- A tray icon (≈14 MB of RAM) and a small native window. No Electron, no
+- A tray icon (≈14 MB of RAM on Windows) and a small native window. No Electron, no
   webview. Helper programs run without console windows.
 
 ## Databases
