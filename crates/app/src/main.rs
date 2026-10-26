@@ -31,7 +31,7 @@ use tr::t;
 
 slint::include_modules!();
 
-const KINDS: [Kind; 13] = [
+const KINDS: [Kind; 15] = [
     Kind::Php,
     Kind::Caddy,
     Kind::Nginx,
@@ -45,6 +45,8 @@ const KINDS: [Kind; 13] = [
     Kind::Composer,
     Kind::Python,
     Kind::Go,
+    Kind::Adminer,
+    Kind::Phpmyadmin,
 ];
 
 const INI_FIELDS: [(&str, &str); 6] = [
@@ -192,6 +194,7 @@ fn main() -> Result<()> {
     b.set_root_dir(layout.root().display().to_string().into());
     b.set_defender_available(platform::os() == platform::Os::Windows);
     b.set_show_share(nudge::share_due(&layout));
+    b.set_desktop_db_tool(meow_core::database::tool_available(&config));
     b.set_kinds(strings(KINDS.iter().map(|k| snapshot::title(*k).to_owned())));
     if let Some(e) = daemon_error {
         show(&window, &format!("{e:#}"), true);
@@ -650,7 +653,7 @@ fn wire(window: &AppWindow, ui: &Ui) {
                         })
                         .is_ok()
                 });
-                if switched {
+                if switched || meow_core::dbtool::TOOLS.contains(&kind) {
                     actions::reload(l);
                     ui.refresh();
                 }
@@ -688,7 +691,12 @@ fn wire(window: &AppWindow, ui: &Ui) {
             load_versions(&w, &ui.layout);
             ui.run(move |l, _| {
                 match kind {
-                    Kind::Php | Kind::Caddy | Kind::Nginx | Kind::Apache => actions::reload(l),
+                    Kind::Php
+                    | Kind::Caddy
+                    | Kind::Nginx
+                    | Kind::Apache
+                    | Kind::Adminer
+                    | Kind::Phpmyadmin => actions::reload(l),
                     Kind::Mysql | Kind::Mariadb | Kind::Postgres | Kind::Redis | Kind::Mailpit => {
                         let snap = snapshot::take(l);
                         if snap.services.iter().any(|s| s.running && s.unit.id() == kind.id()) {
@@ -1003,6 +1011,14 @@ fn wire(window: &AppWindow, ui: &Ui) {
             if let Err(e) = meow_core::database::open_tool(&ui.layout, kind) {
                 ui.message(format!("{e:#}"), true);
             }
+        }
+    });
+    b.on_db_open_web({
+        let ui = ui.clone();
+        move |unit, tool| {
+            let (Some(_), Some(tool)) = (Kind::from_id(&unit), Kind::from_id(&tool)) else { return };
+            let unit = unit.to_string();
+            ui.run(move |l, ui| actions::open_db_tool(l, ui, tool, &unit))
         }
     });
     b.on_trust_ca({

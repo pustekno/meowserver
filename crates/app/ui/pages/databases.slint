@@ -50,13 +50,6 @@ export component DatabasesPage inherits VerticalLayout {
                         }
                     }
                     Button {
-                        text: @tr("Open in tool");
-                        enabled: db.running;
-                        clicked => {
-                            Backend.db-open(db.unit);
-                        }
-                    }
-                    Button {
                         text: @tr("Data folder");
                         clicked => {
                             Backend.open-path(db.data-dir);
@@ -66,6 +59,36 @@ export component DatabasesPage inherits VerticalLayout {
                 Text {
                     text: @tr("Host 127.0.0.1, port {}, user {}", db.port, db.user);
                     color: Theme.muted;
+                }
+                // In the browser, like Laragon; downloaded on first use.
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    Text {
+                        text: @tr("Open in:");
+                        vertical-alignment: center;
+                    }
+                    Button {
+                        text: "Adminer";
+                        enabled: db.running && !Backend.busy;
+                        clicked => {
+                            Backend.db-open-web(db.unit, "adminer");
+                        }
+                    }
+                    if db.unit != "postgres": Button {
+                        text: "phpMyAdmin";
+                        enabled: db.running && !Backend.busy;
+                        clicked => {
+                            Backend.db-open-web(db.unit, "phpmyadmin");
+                        }
+                    }
+                    if Backend.desktop-db-tool: Button {
+                        text: "HeidiSQL";
+                        enabled: db.running;
+                        clicked => {
+                            Backend.db-open(db.unit);
+                        }
+                    }
                 }
                 Text {
                     text: db.data-dir;

@@ -254,6 +254,11 @@ pub fn open_tool(layout: &Layout, kind: Kind) -> Result<()> {
     bail!("no database tool found; set general.db_tool in meow.toml, e.g. \"dbeaver\"")
 }
 
+/// A desktop tool is set up or HeidiSQL is installed (Laragon's counts).
+pub fn tool_available(config: &Config) -> bool {
+    config.general.db_tool.is_some() || (os() == Os::Windows && heidisql().is_some())
+}
+
 fn heidisql() -> Option<PathBuf> {
     let mut candidates = vec![
         PathBuf::from(r"C:\Program Files\HeidiSQL\heidisql.exe"),

@@ -95,6 +95,31 @@ pub fn start_unit(layout: &Layout, ui: &Ui, unit: &str) -> Result<String> {
     result.map(|()| note)
 }
 
+/// Opens the database server `key` in Adminer or phpMyAdmin in the
+/// browser (PRD F28), downloading the tool first if needed.
+pub fn open_db_tool(layout: &Layout, ui: &Ui, tool: Kind, key: &str) -> Result<String> {
+    let config = Config::load(layout)?;
+    let mut note = String::new();
+    if meow_core::dbtool::folder(layout, &config, tool).is_none() {
+        let version = install(layout, ui, tool, None)?;
+        note = format!("{} {version} {}", crate::snapshot::title(tool), t("installed."));
+    }
+    // Writes its settings and serves it; starts the web server if needed.
+    reload(layout);
+    let snap = crate::snapshot::take(layout);
+    if !snap.services.iter().any(|s| s.unit.id() == "web" && s.running) {
+        ui.progress(t("Starting…"));
+        let started = call(layout, Request::Start { unit: "web".into() });
+        ui.progress(String::new());
+        started?;
+    }
+    let config = Config::load(layout)?;
+    let url = meow_core::dbtool::url(layout, &config, tool, key)
+        .with_context(|| format!("{key} is not installed"))?;
+    meow_core::platform::open(std::ffi::OsStr::new(&url))?;
+    Ok(note)
+}
+
 pub fn quick_setup(layout: &Layout, ui: &Ui) -> Result<()> {
     install(layout, ui, Kind::Caddy, None)?;
     install(layout, ui, Kind::Php, None)?;

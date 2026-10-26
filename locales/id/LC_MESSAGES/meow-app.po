@@ -298,9 +298,6 @@ msgstr "Mengunduh Xdebug untuk setiap versi PHP. Mulai sesi dengan ?XDEBUG_TRIGG
 msgid "Back up"
 msgstr "Backup"
 
-msgid "Open in tool"
-msgstr "Buka di aplikasi"
-
 msgid "Tell me about new versions"
 msgstr "Beri tahu saya jika ada versi baru"
 
@@ -420,3 +417,6 @@ msgstr "Usulkan fitur dan bertanya di GitHub Discussions, terbuka untuk siapa sa
 
 msgid "Open discussions"
 msgstr "Buka diskusi"
+
+msgid "Open in:"
+msgstr "Buka di:"

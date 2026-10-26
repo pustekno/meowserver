@@ -97,3 +97,11 @@ pub fn redis_windows() -> GitHub {
         },
     }
 }
+
+/// Adminer with every driver (MySQL/MariaDB and PostgreSQL), as one file.
+pub fn adminer() -> GitHub {
+    GitHub {
+        repo: "vrana/adminer",
+        asset_name: |v| Some((format!("adminer-{v}.php"), Archive::File { name: "adminer.php".into() })),
+    }
+}

@@ -11,6 +11,7 @@ pub mod branding;
 pub mod config;
 pub mod create;
 pub mod database;
+pub mod dbtool;
 pub mod defender;
 pub mod doctor;
 pub mod download;

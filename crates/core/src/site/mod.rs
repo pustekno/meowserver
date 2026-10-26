@@ -54,6 +54,8 @@ pub enum Source {
     Www,
     Parked(PathBuf),
     Added,
+    /// Adminer or phpMyAdmin, installed by MeowServer (PRD F28).
+    Tool,
 }
 
 #[derive(Debug, Default, Serialize)]
@@ -103,6 +105,28 @@ pub fn discover(layout: &Layout, config: &Config) -> Discovery {
     scan(&mut out, config, &php, &www, Source::Www);
     for parked in &config.general.parked {
         scan(&mut out, config, &php, parked, Source::Parked(parked.clone()));
+    }
+    for tool in crate::dbtool::TOOLS {
+        let Some(dir) = crate::dbtool::folder(layout, config, tool) else { continue };
+        if out.sites.iter().any(|s| s.name == tool.id()) {
+            out.warnings.push(format!("a project named {} hides MeowServer's own {0}", tool.id()));
+            continue;
+        }
+        out.sites.push(Site {
+            name: tool.id().into(),
+            host: format!("{}.{}", tool.id(), config.general.suffix.as_str()),
+            source: Source::Tool,
+            path: dir.clone(),
+            docroot: dir,
+            framework: Framework::Php,
+            php: None,
+            proxy: None,
+            force_https: false,
+            needs: needs::Needs::default(),
+            php_auto: false,
+            runtime: None,
+            app_port: None,
+        });
     }
 
     out.sites.sort_by(|a, b| a.name.cmp(&b.name));

@@ -111,6 +111,9 @@ impl Engine {
                 errors.push(format!("{}: {e:#}", unit.id()));
             }
         }
+        if let Err(e) = crate::dbtool::prepare(&self.layout, &ctx.config) {
+            log::warn!("database tools: {e:#}");
+        }
         // Compile the sites' PHP before anyone opens them (PRD F47).
         if state.units.contains_key(&Unit::Php) {
             crate::warm::spawn(self.layout.clone(), ctx.config.clone(), ctx.sites.clone());
@@ -206,6 +209,9 @@ impl Engine {
             }
             state.units.insert(Unit::Web, BTreeSet::from([planned.spec.id.clone()]));
             state.web_reload = planned.reload;
+        }
+        if let Err(e) = crate::dbtool::prepare(&self.layout, &ctx.config) {
+            log::warn!("database tools: {e:#}");
         }
         // New sites, or new Composer packages: compile them in the background.
         crate::warm::spawn(self.layout.clone(), ctx.config.clone(), ctx.sites.clone());

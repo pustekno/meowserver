@@ -44,7 +44,7 @@ component KindList inherits VerticalLayout {
     Group {
         text: @tr("Databases");
     }
-    for i in [4, 5, 6]: NavItem {
+    for i in [4, 5, 6, 13, 14]: NavItem {
         label: Backend.kinds[i];
         active: Backend.kind-index == i;
         clicked => {

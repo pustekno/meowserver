@@ -38,10 +38,13 @@ pub enum Kind {
     Composer,
     Python,
     Go,
+    /// Database tools served as sites (PRD F28): `adminer.localhost`.
+    Adminer,
+    Phpmyadmin,
 }
 
 impl Kind {
-    pub const ALL: [Kind; 13] = [
+    pub const ALL: [Kind; 15] = [
         Kind::Caddy,
         Kind::Nginx,
         Kind::Apache,
@@ -55,6 +58,8 @@ impl Kind {
         Kind::Composer,
         Kind::Python,
         Kind::Go,
+        Kind::Adminer,
+        Kind::Phpmyadmin,
     ];
 
     pub fn id(self) -> &'static str {
@@ -72,6 +77,8 @@ impl Kind {
             Kind::Composer => "composer",
             Kind::Python => "python",
             Kind::Go => "go",
+            Kind::Adminer => "adminer",
+            Kind::Phpmyadmin => "phpmyadmin",
         }
     }
 

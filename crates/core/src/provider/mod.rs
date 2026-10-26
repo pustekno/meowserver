@@ -14,6 +14,7 @@ mod mysql;
 mod nginx;
 mod node;
 mod php;
+mod phpmyadmin;
 mod postgres;
 mod python;
 pub mod xdebug;
@@ -96,6 +97,8 @@ pub fn for_service(kind: Kind) -> Option<Box<dyn Provider>> {
         Kind::Composer => Box::new(composer::Phar),
         Kind::Python => Box::new(python::Standalone),
         Kind::Go => Box::new(go::Dl),
+        Kind::Adminer => Box::new(github::adminer()),
+        Kind::Phpmyadmin => Box::new(phpmyadmin::Official),
         _ => return None,
     })
 }

@@ -308,6 +308,8 @@ pub fn title(kind: Kind) -> &'static str {
         Kind::Mailpit => "Mailpit",
         Kind::Node => "Node.js",
         Kind::Composer => "Composer",
+        Kind::Adminer => "Adminer",
+        Kind::Phpmyadmin => "phpMyAdmin",
         Kind::Python => "Python",
         Kind::Go => "Go",
     }
@@ -341,6 +343,7 @@ pub fn source_label(s: &Source) -> &'static str {
         Source::Www => "www",
         Source::Parked(_) => "parked",
         Source::Added => "added",
+        Source::Tool => "tool",
     }
 }
 

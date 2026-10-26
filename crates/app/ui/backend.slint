@@ -235,7 +235,11 @@ export global Backend {
     callback set-check-updates(bool);
     callback set-xdebug(bool);
     callback db-backup(string);
+    // HeidiSQL or general.db_tool is there for db-open.
+    in property <bool> desktop-db-tool;
     callback db-open(string);
+    // Opens a database server in Adminer or phpMyAdmin, installing it first.
+    callback db-open-web(string, string);
     callback install-service(string);
     callback trust-ca();
     callback undo-system();

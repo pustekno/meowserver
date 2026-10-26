@@ -384,10 +384,18 @@ other tool's files are only read.
 *Done when:* the owner's Laragon setup with MySQL 8.4 data runs on MeowServer
 without dump or import.
 
-**F28 — Open in database tool.** A button that opens the configured database
-GUI (HeidiSQL, DBeaver, TablePlus, Adminer, or a custom command) with the
-connection filled in where the tool supports it.
-*Done when:* the button opens HeidiSQL connected to the running MySQL.
+**F28 — Open in database tool.** Each database server on the Databases
+page opens in Adminer (MySQL, MariaDB, and PostgreSQL) or phpMyAdmin
+(MySQL and MariaDB), whichever the user prefers, in the browser and
+already logged in; the first click downloads the tool from its official
+source (Adminer from GitHub Releases, phpMyAdmin from phpmyadmin.net, both
+with SHA-256). They are served as `adminer.<suffix>` and
+`phpmyadmin.<suffix>` by the web server and PHP pool, with settings
+MeowServer writes on every start, and answer only requests from this
+computer. HeidiSQL (or the command in `general.db_tool`) is offered when
+it is installed.
+*Done when:* the buttons open MySQL in Adminer and phpMyAdmin, and
+PostgreSQL in Adminer, logged in, on a machine that had neither.
 
 #### Tools and app
 
@@ -1337,6 +1345,7 @@ directly:
 | 2026-10-25 | Owner request: domain per project (default `.localhost`, `.test` where wanted; F15), several MySQL/MariaDB versions at once (F24), import copies projects stored inside the old tool and follows its links so the tool can be removed (F27), ports return once free (F41), and project needs read from composer.json and settings (F42). Found while testing: Inno Setup 6.7 enforces Windows' RedirectionGuard on Setup, and programs Setup starts inherit it and refuse junctions made without admin rights; Setup now starts MeowServer through Explorer, the window restarts itself through Explorer when it finds the guard, and Doctor reports it. |
 | 2026-10-25 | Owner request: a Windows installer for first install and updates that never deletes data. Inno Setup 6 (free for open source; the only build tool that is not Rust), per user without administrator rights, default `C:\MeowServer` because data lives next to the program; Program Files is refused. Updates replace only the program files; uninstall keeps `www`, `data`, `bin`, and settings. |
 | 2026-10-26 | Owner request after testing with an intern: MeowServer should be ready when it first opens. Setup now asks for the web server and database and downloads them (F48), offers the import from another tool, and installing a web server on the Versions page switches to it (the intern installed Nginx and the sites stayed on Caddy). |
+| 2026-10-26 | Owner request: database access like Laragon's. Adminer and phpMyAdmin, the user picks; PostgreSQL through Adminer (phpMyAdmin is MySQL-only). phpMyAdmin 5.2.3 lists PHP below 8.4 as supported but was tested on 8.5.12 without errors. |
 
 No open questions remain for v1.0 scope. New questions are added here as they
 come up.
