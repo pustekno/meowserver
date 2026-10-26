@@ -327,7 +327,7 @@ impl Engine {
 
     /// Programs from outside this MeowServer folder listening on `port`.
     fn foreign_owners(&self, port: u16) -> Vec<String> {
-        self.foreign_processes(port).into_iter().map(|(pid, exe)| format!("{exe} (pid {pid})")).collect()
+        name_owners(self.foreign_processes(port))
     }
 
     /// What holds `port` besides `unit` itself: other programs, and
@@ -343,11 +343,7 @@ impl Engine {
                 _ => None,
             })
             .collect();
-        platform::port_owners(port)
-            .into_iter()
-            .filter(|(pid, _)| !own.contains(pid))
-            .map(|(pid, exe)| format!("{exe} (pid {pid})"))
-            .collect()
+        name_owners(platform::port_owners(port).into_iter().filter(|(pid, _)| !own.contains(pid)).collect())
     }
 
     fn foreign_processes(&self, port: u16) -> Vec<(u32, String)> {
@@ -676,6 +672,18 @@ fn listening_ports(unit: Unit) -> Vec<(&'static str, PortField, u16, u16)> {
 /// ranges (Hyper-V, WSL) that have no listener yet refuse to bind.
 fn port_free(port: u16) -> bool {
     platform::port_owners(port).is_empty() && std::net::TcpListener::bind(("127.0.0.1", port)).is_ok()
+}
+
+/// "nginx (pid 1065, 1066)": a server's worker processes share one entry.
+fn name_owners(processes: Vec<(u32, String)>) -> Vec<String> {
+    let mut by_exe: Vec<(String, Vec<String>)> = Vec::new();
+    for (pid, exe) in processes {
+        match by_exe.iter_mut().find(|(e, _)| *e == exe) {
+            Some((_, pids)) => pids.push(pid.to_string()),
+            None => by_exe.push((exe, vec![pid.to_string()])),
+        }
+    }
+    by_exe.into_iter().map(|(exe, pids)| format!("{exe} (pid {})", pids.join(", "))).collect()
 }
 
 fn parse_unit(name: &str) -> Result<Unit> {
