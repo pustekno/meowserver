@@ -133,6 +133,17 @@ impl Engine {
         if wanted.contains(&Unit::Web) {
             wanted.insert(Unit::Php);
         }
+        // php.ini sends mail() to Mailpit only when Mailpit was installed as
+        // PHP started; until PHP starts again, mail goes to the system's
+        // sendmail (or nowhere on Windows). Mailpit starts first.
+        if wanted.contains(&Unit::Mailpit)
+            && !state.units.contains_key(&Unit::Mailpit)
+            && state.units.contains_key(&Unit::Php)
+            && !wanted.contains(&Unit::Php)
+        {
+            self.stop_unit(&mut state, Unit::Php);
+            wanted.insert(Unit::Php);
+        }
         let mut errors = Vec::new();
         for unit in Unit::ALL.into_iter().filter(|u| wanted.contains(u)) {
             if let Err(e) = self.start_unit(&mut state, &mut ctx, unit) {
