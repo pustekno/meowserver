@@ -9,7 +9,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::sync::Arc;
 
 use anyhow::{Context, Result, anyhow, bail};
-use interprocess::local_socket::{GenericNamespaced, ListenerOptions, Name, Stream, prelude::*};
+use interprocess::local_socket::{GenericNamespaced, Listener, ListenerOptions, Name, Stream, prelude::*};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -140,9 +140,12 @@ pub fn ensure_running(layout: &Layout, headless: bool) -> Result<Client> {
 
 pub type Handler = Arc<dyn Fn(Request) -> Response + Send + Sync>;
 
-/// Starts serving requests on a background thread. Fails if another
-/// `meowd` already owns this folder's endpoint.
-pub fn serve(layout: &Layout, handler: Handler) -> Result<()> {
+/// This folder's endpoint, owned but not answering yet: clients that
+/// connect wait until [`Endpoint::serve`].
+pub struct Endpoint(Listener);
+
+/// Takes this folder's endpoint. Fails if another `meowd` owns it.
+pub fn bind(layout: &Layout) -> Result<Endpoint> {
     let listener = match ListenerOptions::new().name(endpoint(layout)?).create_sync() {
         Ok(listener) => listener,
         // On macOS the endpoint is a socket file in /tmp, left behind when
@@ -154,20 +157,28 @@ pub fn serve(layout: &Layout, handler: Handler) -> Result<()> {
         }
         Err(e) => return Err(e).context("another MeowServer is already running for this folder"),
     };
-    std::thread::Builder::new().name("ipc".into()).spawn(move || {
-        for conn in listener.incoming() {
-            match conn {
-                Ok(conn) => {
-                    let handler = handler.clone();
-                    let _ = std::thread::Builder::new()
-                        .name("ipc client".into())
-                        .spawn(move || serve_client(conn, handler));
+    Ok(Endpoint(listener))
+}
+
+impl Endpoint {
+    /// Answers requests on a background thread.
+    pub fn serve(self, handler: Handler) -> Result<()> {
+        let listener = self.0;
+        std::thread::Builder::new().name("ipc".into()).spawn(move || {
+            for conn in listener.incoming() {
+                match conn {
+                    Ok(conn) => {
+                        let handler = handler.clone();
+                        let _ = std::thread::Builder::new()
+                            .name("ipc client".into())
+                            .spawn(move || serve_client(conn, handler));
+                    }
+                    Err(e) => log::warn!("ipc accept failed: {e}"),
                 }
-                Err(e) => log::warn!("ipc accept failed: {e}"),
             }
-        }
-    })?;
-    Ok(())
+        })?;
+        Ok(())
+    }
 }
 
 fn serve_client(conn: Stream, handler: Handler) {

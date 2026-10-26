@@ -68,7 +68,6 @@ fn run() -> Result<()> {
             let _ = proxy.send_event(UserEvent::Shutdown);
         }
     })?;
-    engine.end_strays();
 
     let forward = proxy.clone();
     std::thread::spawn(move || {
@@ -213,7 +212,6 @@ fn run_headless(
     serve_ipc(layout, engine.clone(), move || {
         let _ = quit_tx.send(());
     })?;
-    engine.end_strays();
     std::thread::spawn(move || for _ in events_rx {});
     let watched = engine.clone();
     watch::spawn(layout.clone(), move || {
@@ -236,25 +234,26 @@ fn serve_ipc(
     engine: Arc<Engine>,
     on_shutdown: impl Fn() + Send + Sync + 'static,
 ) -> Result<()> {
+    let endpoint = ipc::bind(layout)?;
+    // Before answering anyone: a start requested meanwhile would find the
+    // old services still on their ports.
+    engine.end_strays();
     let proxy_engine = engine.clone();
-    ipc::serve(
-        layout,
-        Arc::new(move |request| match request {
-            Request::Shutdown => {
-                on_shutdown();
-                Response::ok(())
+    endpoint.serve(Arc::new(move |request| match request {
+        Request::Shutdown => {
+            on_shutdown();
+            Response::ok(())
+        }
+        other => {
+            let changes = !matches!(other, Request::Status);
+            let response = proxy_engine.handle(other);
+            if changes {
+                let engine = proxy_engine.clone();
+                std::thread::spawn(move || sync_hosts(&engine));
             }
-            other => {
-                let changes = !matches!(other, Request::Status);
-                let response = proxy_engine.handle(other);
-                if changes {
-                    let engine = proxy_engine.clone();
-                    std::thread::spawn(move || sync_hosts(&engine));
-                }
-                response
-            }
-        }),
-    )
+            response
+        }
+    }))
 }
 
 /// Runs a slow engine call off the UI thread, reports failures in the tray,
