@@ -78,6 +78,35 @@ impl Engine {
         }
     }
 
+    /// Ends services from this folder that a killed `meowd` left running,
+    /// so this start gets their ports back. Windows ends them with the Job
+    /// Object and Linux with `PR_SET_PDEATHSIG`; macOS has neither. Call
+    /// once this `meowd` owns the folder's endpoint.
+    pub fn end_strays(&self) {
+        const SERVICES: &[&str] = &[
+            "caddy",
+            "nginx",
+            "httpd",
+            "php-fpm",
+            "php-cgi",
+            "mysqld",
+            "mariadbd",
+            "postgres",
+            "redis-server",
+            "mailpit",
+        ];
+        let strays = platform::processes_in(&self.layout.root().join("bin"), SERVICES);
+        for (pid, path) in &strays {
+            log::warn!("ending {path} (pid {pid}), left running by an earlier MeowServer");
+            platform::terminate(*pid);
+        }
+        // Databases shut down cleanly on the request; give them time.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
+        while strays.iter().any(|(pid, _)| platform::is_alive(*pid)) && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(200));
+        }
+    }
+
     /// Starts every unit in `general.autostart`.
     pub fn start_all(&self) -> Result<()> {
         let config = Config::load(&self.layout)?;

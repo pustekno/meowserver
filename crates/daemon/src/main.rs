@@ -68,6 +68,7 @@ fn run() -> Result<()> {
             let _ = proxy.send_event(UserEvent::Shutdown);
         }
     })?;
+    engine.end_strays();
 
     let forward = proxy.clone();
     std::thread::spawn(move || {
@@ -212,6 +213,7 @@ fn run_headless(
     serve_ipc(layout, engine.clone(), move || {
         let _ = quit_tx.send(());
     })?;
+    engine.end_strays();
     std::thread::spawn(move || for _ in events_rx {});
     let watched = engine.clone();
     watch::spawn(layout.clone(), move || {
