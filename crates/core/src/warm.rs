@@ -83,6 +83,9 @@ fn warm_site(layout: &Layout, config: &Config, site: &Site) -> Result<Option<Str
         low_priority(&mut cmd);
         let out = cmd.output().context("cannot run PHP")?;
         let text = String::from_utf8_lossy(&out.stdout);
+        if text.lines().any(|l| l == "no-opcache") {
+            anyhow::bail!("PHP {} has no OPcache; its sites compile on the first visit", installed.version);
+        }
         if let Some(summary) = text.lines().find_map(|l| l.strip_prefix("done ")) {
             let mut report = summary.to_owned();
             if !stopped_at.is_empty() {
@@ -113,22 +116,27 @@ fn stamp_dir(layout: &Layout) -> PathBuf {
     layout.data().join("php").join("opcache").join("warmed")
 }
 
-/// What decides whether a site needs compiling again: the PHP build, and
-/// when its Composer packages last changed. Edited app files need nothing:
-/// OPcache recompiles a changed file on its next use.
+/// What decides whether a site needs compiling again: the PHP build (a
+/// reinstall of the same version is another build), and when its Composer
+/// packages last changed. Edited app files need nothing: OPcache recompiles
+/// a changed file on its next use.
 fn stamp(installed: &Installed, project: &Path) -> String {
-    let changed = |rel: &str| {
-        std::fs::metadata(project.join(rel))
+    let modified = |path: &Path| {
+        std::fs::metadata(path)
             .and_then(|m| m.modified())
             .ok()
             .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
             .map_or(0, |d| d.as_secs())
     };
+    // Extracting keeps the archive's dates, so the size tells builds apart too.
+    let php = installed.exe("php");
+    let size = std::fs::metadata(&php).map_or(0, |m| m.len());
     format!(
-        "{}\n{}\n{}",
+        "{} {} {size}\n{}\n{}",
         installed.version,
-        changed("composer.lock"),
-        changed("vendor/composer/installed.json")
+        modified(&php),
+        modified(&project.join("composer.lock")),
+        modified(&project.join("vendor/composer/installed.json"))
     )
 }
 

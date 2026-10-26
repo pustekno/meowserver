@@ -12,6 +12,11 @@
 // again after the one that failed; the order is fixed for that reason.
 $root = $argv[1];
 $from = isset($argv[2]) ? (int) $argv[2] : 0;
+// Without OPcache every file would count as skipped, and the site as done.
+if (!function_exists('opcache_compile_file')) {
+    echo "no-opcache\n";
+    exit;
+}
 // Not loaded when the site runs, or not PHP the site loads from here.
 $skip = ['node_modules', 'tests', 'Tests', 'test', 'cache', 'logs', 'sessions'];
 $files = new RecursiveIteratorIterator(new RecursiveCallbackFilterIterator(
