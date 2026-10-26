@@ -766,3 +766,22 @@ fn plan_web(layout: &Layout, config: &Config, sites: &[Site], php: &php::Plan) -
         WebServer::Apache => apache::plan(layout, config, sites, php),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn owners_are_named_once_per_program() {
+        let owners = name_owners(vec![
+            (1065, "/Applications/Herd.app/nginx".into()),
+            (900, "/opt/homebrew/bin/mysqld".into()),
+            (1066, "/Applications/Herd.app/nginx".into()),
+        ]);
+        assert_eq!(
+            owners,
+            ["/Applications/Herd.app/nginx (pid 1065, 1066)", "/opt/homebrew/bin/mysqld (pid 900)"]
+        );
+        assert!(name_owners(Vec::new()).is_empty());
+    }
+}
