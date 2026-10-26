@@ -394,6 +394,23 @@ impl Engine {
             }
             let owners = self.other_owners(unit, current);
             if owners.is_empty() {
+                // Nobody holds it, yet it cannot be opened: macOS lets only
+                // root bind ports below 1024 to 127.0.0.1. Moving is for
+                // good, as waiting would not help.
+                if !needs_admin(config, current) {
+                    continue;
+                }
+                let taken = configured_ports(&moved);
+                let Some(free) =
+                    (first..first.saturating_add(200)).find(|p| !taken.contains(p) && port_free(*p))
+                else {
+                    continue;
+                };
+                change(&mut moved, &mut changes, Change::Port { service, field, port: free, from: None });
+                notes.push(format!(
+                    "{service}: port {current} can only be opened with administrator rights, so MeowServer's \
+                     {service} uses port {free} (saved in meow.toml)"
+                ));
                 continue;
             }
             let taken = configured_ports(&moved);
@@ -684,6 +701,15 @@ fn name_owners(processes: Vec<(u32, String)>) -> Vec<String> {
         }
     }
     by_exe.into_iter().map(|(exe, pids)| format!("{exe} (pid {})", pids.join(", "))).collect()
+}
+
+/// The address services listen on refuses `port` for lack of rights.
+fn needs_admin(config: &Config, port: u16) -> bool {
+    let address = if config.general.lan_access { "0.0.0.0" } else { "127.0.0.1" };
+    matches!(
+        std::net::TcpListener::bind((address, port)),
+        Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied
+    )
 }
 
 fn parse_unit(name: &str) -> Result<Unit> {
