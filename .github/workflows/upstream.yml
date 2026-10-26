@@ -20,3 +20,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo test -p meow-core --test upstream -- --ignored --nocapture
+        env:
+          # GitHub's API limit without a token is shared by every job on
+          # the runner's address; macOS runners hit it (HTTP 403).
+          MEOW_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

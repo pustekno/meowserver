@@ -39,8 +39,7 @@ impl Http {
     }
 
     pub fn get_json<T: DeserializeOwned>(&self, url: &str) -> Result<T> {
-        self.agent
-            .get(url)
+        self.get(url)
             .call()
             .with_context(|| format!("request to {url} failed"))?
             .body_mut()
@@ -49,13 +48,26 @@ impl Http {
     }
 
     pub fn get_text(&self, url: &str) -> Result<String> {
-        self.agent
-            .get(url)
+        self.get(url)
             .call()
             .with_context(|| format!("request to {url} failed"))?
             .body_mut()
             .read_to_string()
             .with_context(|| format!("unexpected response from {url}"))
+    }
+
+    /// GitHub's API allows 60 requests an hour per address without a
+    /// token, which shared CI runners use up. `MEOW_GITHUB_TOKEN`, when
+    /// set, goes to api.github.com only; a token people keep for other
+    /// tools (`GITHUB_TOKEN`) is never sent.
+    fn get(&self, url: &str) -> ureq::RequestBuilder<ureq::typestate::WithoutBody> {
+        let request = self.agent.get(url);
+        match std::env::var("MEOW_GITHUB_TOKEN") {
+            Ok(token) if !token.is_empty() && url.starts_with("https://api.github.com/") => {
+                request.header("Authorization", format!("Bearer {token}"))
+            }
+            _ => request,
+        }
     }
 
     /// Streams `url` into `dest`, reporting `(received, total)` as it goes.
