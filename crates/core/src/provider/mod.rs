@@ -113,6 +113,21 @@ pub fn not_downloadable(service: &str, layout: &crate::layout::Layout) -> String
     )
 }
 
+/// The second sentence of "X is not installed": the command to get it, or
+/// where to put a build when there is no download here.
+pub fn install_advice(
+    kind: crate::service::Kind,
+    selector: Option<&str>,
+    layout: &crate::layout::Layout,
+) -> String {
+    match for_service(kind) {
+        Some(_) => {
+            format!("Run `{}`.", format!("meow install {} {}", kind.id(), selector.unwrap_or("")).trim_end())
+        }
+        None => format!("{}.", not_downloadable(kind.id(), layout)),
+    }
+}
+
 fn sort_newest_first(releases: &mut [Release]) {
     releases.sort_by(|a, b| b.version.cmp(&a.version));
 }

@@ -786,7 +786,10 @@ pub fn apply(
                 config.general.autostart.push(db.kind.id().into());
             }
             if service::select(layout, db.kind, Some(&line)).is_none() {
-                notes.push(format!("install the matching server: meow install {} {line}", db.kind.id()));
+                notes.push(format!(
+                    "install the matching server. {}",
+                    crate::provider::install_advice(db.kind, Some(&line), layout)
+                ));
             }
         }
     }

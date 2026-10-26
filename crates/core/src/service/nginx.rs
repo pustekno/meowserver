@@ -37,7 +37,7 @@ struct Context {
 
 pub fn plan(layout: &Layout, config: &Config, sites: &[Site], php: &php::Plan) -> Result<Planned> {
     let Some(installed) = super::select(layout, Kind::Nginx, config.version_selector("nginx")) else {
-        bail!("Nginx is not installed. Run `meow install nginx`.");
+        bail!("Nginx is not installed. {}", crate::provider::install_advice(Kind::Nginx, None, layout));
     };
     let prefix = layout.data().join("nginx");
     let temp = prefix.join("temp");

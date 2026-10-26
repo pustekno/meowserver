@@ -22,7 +22,10 @@ pub const DEFAULT_PORT: u16 = 5432;
 
 pub fn plan(layout: &Layout, config: &Config) -> Result<ProcessSpec> {
     let Some(installed) = super::select(layout, Kind::Postgres, config.version_selector("postgres")) else {
-        bail!("PostgreSQL is not installed. Run `meow install postgres`.");
+        bail!(
+            "PostgreSQL is not installed. {}",
+            crate::provider::install_advice(Kind::Postgres, None, layout)
+        );
     };
     let data = datadir::path(layout, config, Kind::Postgres, &installed.version);
     if datadir::check(&data, Kind::Postgres, &installed.version)? {

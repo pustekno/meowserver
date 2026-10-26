@@ -20,7 +20,7 @@ pub fn web_url(config: &Config) -> String {
 
 pub fn plan(layout: &Layout, config: &Config) -> Result<ProcessSpec> {
     let Some(installed) = super::select(layout, Kind::Mailpit, config.version_selector("mailpit")) else {
-        bail!("Mailpit is not installed. Run `meow install mailpit`.");
+        bail!("Mailpit is not installed. {}", crate::provider::install_advice(Kind::Mailpit, None, layout));
     };
     let data = layout.data().join("mailpit");
     std::fs::create_dir_all(&data)?;

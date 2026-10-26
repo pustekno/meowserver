@@ -25,7 +25,7 @@ struct Context {
 
 pub fn plan(layout: &Layout, config: &Config) -> Result<ProcessSpec> {
     let Some(installed) = super::select(layout, Kind::Redis, config.version_selector("redis")) else {
-        bail!("Redis is not installed. Run `meow install redis`.");
+        bail!("Redis is not installed. {}", crate::provider::install_advice(Kind::Redis, None, layout));
     };
     let data = layout.data().join("redis");
     std::fs::create_dir_all(&data)?;

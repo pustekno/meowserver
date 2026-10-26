@@ -74,7 +74,7 @@ struct Context {
 
 pub fn plan(layout: &Layout, config: &Config, sites: &[Site], php: &php::Plan) -> Result<Planned> {
     let Some(installed) = super::select(layout, Kind::Apache, config.version_selector("apache")) else {
-        bail!("Apache is not installed. Run `meow install apache`.");
+        bail!("Apache is not installed. {}", crate::provider::install_advice(Kind::Apache, None, layout));
     };
     let state = layout.data().join("apache");
     let custom = layout.custom().join("apache");

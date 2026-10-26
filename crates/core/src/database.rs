@@ -54,7 +54,11 @@ pub fn enable_version(layout: &Layout, kind: Kind, line: &str, port: Option<u16>
     let mut config = Config::load(layout)?;
     let default = active(layout, &config, kind)?;
     let installed = service::select(layout, kind, Some(line)).with_context(|| {
-        format!("{} {line} is not installed: meow install {} {line}", kind.id(), kind.id())
+        format!(
+            "{} {line} is not installed. {}",
+            kind.id(),
+            crate::provider::install_advice(kind, Some(line), layout)
+        )
     })?;
     let line = datadir::line(kind, &installed.version);
     if line == datadir::line(kind, &default.version) {
@@ -181,7 +185,11 @@ pub fn upgrade(layout: &Layout, kind: Kind, to: &str, progress: &mut dyn FnMut(u
     let mut config = Config::load(layout)?;
     let current = active(layout, &config, kind)?;
     let target = service::select(layout, kind, Some(to)).with_context(|| {
-        format!("{} {to} is not installed; run `meow install {} {to}`", kind.id(), kind.id())
+        format!(
+            "{} {to} is not installed. {}",
+            kind.id(),
+            crate::provider::install_advice(kind, Some(to), layout)
+        )
     })?;
     if target.version <= current.version {
         bail!("{} {} is not newer than the active {}", kind.id(), target.version, current.version);

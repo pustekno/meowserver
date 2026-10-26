@@ -52,7 +52,7 @@ pub struct Instance {
 pub fn instances(layout: &Layout, config: &Config, kind: Kind) -> Result<(Vec<Instance>, Vec<String>)> {
     let name = product(kind);
     let Some(installed) = super::select(layout, kind, config.version_selector(kind.id())) else {
-        bail!("{name} is not installed. Run `meow install {}`.", kind.id());
+        bail!("{name} is not installed. {}", crate::provider::install_advice(kind, None, layout));
     };
     let default_line = datadir::line(kind, &installed.version);
     let mut out = vec![Instance {
@@ -75,8 +75,8 @@ pub fn instances(layout: &Layout, config: &Config, kind: Kind) -> Result<(Vec<In
                 installed,
             }),
             None => warnings.push(format!(
-                "{name} {line} is set to run on port {port} but is not installed: meow install {} {line}",
-                kind.id()
+                "{name} {line} is set to run on port {port} but is not installed. {}",
+                crate::provider::install_advice(kind, Some(&line), layout)
             )),
         }
     }

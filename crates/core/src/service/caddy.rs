@@ -39,7 +39,7 @@ struct Context {
 
 pub fn plan(layout: &Layout, config: &Config, sites: &[Site], php: &php::Plan) -> Result<Planned> {
     let Some(installed) = super::select(layout, Kind::Caddy, config.version_selector("caddy")) else {
-        bail!("Caddy is not installed. Run `meow install caddy`.");
+        bail!("Caddy is not installed. {}", crate::provider::install_advice(Kind::Caddy, None, layout));
     };
     let admin = format!("127.0.0.1:{}", config.port("caddy", DEFAULT_ADMIN_PORT));
     let custom = layout.custom().join("caddy");
