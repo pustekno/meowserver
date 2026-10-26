@@ -55,6 +55,9 @@ msgstr "Selamat datang di MeowServer"
 msgid "Nothing is installed yet. The recommended stack is Caddy, the newest PHP, and MySQL 8.4, downloaded from their official sources."
 msgstr "Belum ada yang terpasang. Paket yang disarankan: Caddy, PHP terbaru, dan MySQL 8.4, diunduh dari sumber resminya."
 
+msgid "Nothing is installed yet. The recommended stack is Caddy and the newest PHP, downloaded from their official sources. MySQL has no download for this system yet."
+msgstr "Belum ada yang terpasang. Paket yang disarankan: Caddy dan PHP terbaru, diunduh dari sumber resminya. MySQL belum bisa diunduh untuk sistem ini."
+
 msgid "Install recommended stack"
 msgstr "Pasang paket yang disarankan"
 

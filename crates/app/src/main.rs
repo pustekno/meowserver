@@ -1131,6 +1131,7 @@ fn apply(w: &AppWindow, snap: &snapshot::Snapshot, local: &mut Local) {
     b.set_headline(snap.headline.clone().into());
     b.set_any_running(snap.any_running);
     b.set_needs_setup(snap.needs_setup);
+    b.set_mysql_downloadable(meow_core::provider::for_service(meow_core::service::Kind::Mysql).is_some());
     b.set_localhost_url(snap.localhost_url.clone().into());
     b.set_services(model(
         snap.services

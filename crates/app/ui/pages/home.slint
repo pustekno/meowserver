@@ -62,7 +62,9 @@ export component HomePage inherits VerticalLayout {
                     font-weight: 600;
                 }
                 Text {
-                    text: @tr("Nothing is installed yet. The recommended stack is Caddy, the newest PHP, and MySQL 8.4, downloaded from their official sources.");
+                    text: Backend.mysql-downloadable
+                        ? @tr("Nothing is installed yet. The recommended stack is Caddy, the newest PHP, and MySQL 8.4, downloaded from their official sources.")
+                        : @tr("Nothing is installed yet. The recommended stack is Caddy and the newest PHP, downloaded from their official sources. MySQL has no download for this system yet.");
                     wrap: word-wrap;
                 }
                 HorizontalLayout {

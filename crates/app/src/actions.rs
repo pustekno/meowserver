@@ -121,14 +121,23 @@ pub fn open_db_tool(layout: &Layout, ui: &Ui, tool: Kind, key: &str) -> Result<S
 }
 
 pub fn quick_setup(layout: &Layout, ui: &Ui) -> Result<()> {
+    // MySQL has no download on macOS: the rest of the stack still installs.
+    let mysql = provider::for_service(Kind::Mysql).is_some();
     install(layout, ui, Kind::Caddy, None)?;
     install(layout, ui, Kind::Php, None)?;
-    install(layout, ui, Kind::Mysql, Some("8.4"))?;
+    if mysql {
+        install(layout, ui, Kind::Mysql, Some("8.4"))?;
+    }
     if let Err(e) = install(layout, ui, Kind::Composer, None) {
         log_warn(&format!("Composer: {e:#}"));
     }
     let mut config = Config::load(layout)?;
-    config.versions.insert("mysql".into(), "8.4".into());
+    if mysql {
+        config.versions.insert("mysql".into(), "8.4".into());
+    } else if service::select(layout, Kind::Mysql, None).is_none() {
+        // Or every start would report MySQL as missing.
+        config.general.autostart.retain(|unit| unit != "mysql");
+    }
     config.save(layout)?;
     ui.progress(t("Starting…"));
     ipc::ensure_running(layout, false)?.call(Request::StartAll)?;

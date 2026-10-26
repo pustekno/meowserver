@@ -114,6 +114,8 @@ export global Backend {
     // The same, as text to copy.
     in property <string> problems-text;
     in property <bool> needs-setup;
+    // MySQL has a download on this system (not on macOS yet).
+    in property <bool> mysql-downloadable: true;
     // Other tools found to import from (Laragon, XAMPP, WampServer,
     // FlyEnv), and the plan shown before anything is copied.
     in property <[Choice]> importers;
