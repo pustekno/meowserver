@@ -10,3 +10,9 @@ Maintainers
 Contributors
     The full list of contributors is in the git history:
     git shortlog -sne
+
+Made with
+    Claude (Anthropic), through Claude Code: much of the code and
+    documentation, reviewed and tested by the maintainers. Commits it
+    helped with carry a "Co-Authored-By: Claude" line.
+    Google Stitch: the icon.

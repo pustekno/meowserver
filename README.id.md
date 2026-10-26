@@ -166,11 +166,69 @@ cargo xtask dist        # zip portable dan setup di dist/
 
 Lihat [CONTRIBUTING.md](CONTRIBUTING.md) (bahasa Inggris).
 
-## Lisensi
+## Lisensi dan atribusi
 
-GPL-3.0-or-later dengan syarat tambahan atribusi berdasarkan Pasal 7(b).
-Lihat [LICENSE](LICENSE) dan [NOTICE](NOTICE). Nama dan logo MeowServer
-diatur di [TRADEMARK.md](TRADEMARK.md).
+MeowServer adalah perangkat lunak bebas di bawah **GNU GPL 3.0 atau
+lebih baru**, dengan satu syarat tambahan berdasarkan Pasal 7(b)
+([LICENSE](LICENSE), [NOTICE](NOTICE)). Kamu boleh memakainya untuk apa
+saja, mempelajari dan mengubahnya, mem-fork, dan membagikannya, gratis
+maupun berbayar.
 
-Dibuat awalnya oleh **Pustekno** (https://pustekno.id) dan **Puskomedia**
-(https://www.puskomedia.id).
+Kalau kamu membagikan salinan atau versi yang diubah (fork), kamu wajib:
+
+1. **Mempertahankan atribusi, persis kata per kata,** di layar Tentang dan
+   di dokumentasi yang menyertainya (misalnya README):
+
+   > Originally created by Pustekno (https://pustekno.id) and Puskomedia
+   > (https://www.puskomedia.id).
+
+   Kamu boleh menambahkan namamu di sebelahnya, tapi tidak boleh
+   menggantinya. MeowServer menampilkannya di **Pengaturan → Tentang**.
+2. **Tetap GPL:** versimu tetap di bawah lisensi yang sama, dengan source
+   code yang tersedia untuk semua orang yang menerimanya.
+3. **Ganti nama:** versi yang diubah tidak boleh memakai nama "MeowServer"
+   atau logonya, dan tidak boleh terkesan resmi atau didukung
+   ([TRADEMARK.md](TRADEMARK.md)). Mengganti nama tidak menghapus atribusi
+   di poin 1.
+
+Tidak diwajibkan lisensi, tapi kami minta kepada siapa pun yang membangun
+di atasnya: sebutkan bahwa proyekmu berbasis MeowServer di mana pun kamu
+memperkenalkannya, termasuk pengumuman dan postingan media sosial, bukan
+hanya di dalam repository. Sebuah fork harus mudah dikenali sebagai fork.
+
+## Kredit
+
+- **Dibuat awalnya oleh Pustekno (https://pustekno.id) dan Puskomedia
+  (https://www.puskomedia.id).** Pendiri dan maintainer utama: Akbar
+  Bahaulloh. Kontributor lain ada di [AUTHORS](AUTHORS) dan riwayat git.
+- **Dibuat menggunakan Claude** (Anthropic): sebagian besar kode dan
+  dokumentasi ditulis dengan Claude lewat Claude Code, lalu ditinjau dan
+  diuji oleh maintainer. Commit yang dibantunya mencantumkan baris
+  `Co-Authored-By: Claude`.
+- **Ikon** dirancang dengan Google Stitch.
+- Ditulis dengan **Rust**; jendelanya memakai **Slint** di bawah lisensi
+  GPL-3.0-nya.
+
+MeowServer tidak menyertakan program yang dijalankannya. Masing-masing
+diunduh dari sumber resminya saat kamu memintanya, tanpa diubah dan di
+bawah lisensinya sendiri:
+[Caddy](https://caddyserver.com),
+[Nginx](https://nginx.org),
+[Apache HTTP Server](https://httpd.apache.org) (build Windows dari
+[Apache Lounge](https://www.apachelounge.com)),
+[PHP](https://www.php.net),
+[MySQL](https://www.mysql.com),
+[MariaDB](https://mariadb.org),
+[PostgreSQL](https://www.postgresql.org) (build Windows dari EDB),
+[Redis](https://redis.io) (port Windows dari
+[redis-windows](https://github.com/redis-windows/redis-windows)),
+[Mailpit](https://mailpit.axllent.org),
+[Composer](https://getcomposer.org),
+[Node.js](https://nodejs.org),
+[Python](https://www.python.org) (build dari
+[python-build-standalone](https://github.com/astral-sh/python-build-standalone)),
+[Go](https://go.dev),
+[Adminer](https://www.adminer.org),
+[phpMyAdmin](https://www.phpmyadmin.net),
+[Xdebug](https://xdebug.org), dan ekstensi PHP dari
+[PECL](https://pecl.php.net). Terima kasih untuk semua yang membuatnya.

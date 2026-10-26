@@ -162,11 +162,66 @@ cargo xtask dist        # portable zip and setup in dist/
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## License
+## License and attribution
 
-GPL-3.0-or-later with an additional attribution term under section 7(b).
-See [LICENSE](LICENSE) and [NOTICE](NOTICE). The MeowServer name and logo
-are covered by [TRADEMARK.md](TRADEMARK.md).
+MeowServer is free software under the **GNU GPL 3.0 or later**, with one
+additional term under section 7(b) ([LICENSE](LICENSE), [NOTICE](NOTICE)).
+You may use it for anything, study and change it, fork it, and pass it on,
+for free or for a fee.
 
-Originally created by **Pustekno** (https://pustekno.id) and **Puskomedia**
-(https://www.puskomedia.id).
+If you pass on a copy or a modified version (a fork), you must:
+
+1. **Keep the attribution, word for word,** in the About screen and in the
+   documentation that comes with it (such as the README):
+
+   > Originally created by Pustekno (https://pustekno.id) and Puskomedia
+   > (https://www.puskomedia.id).
+
+   You may add your own names next to it, never in place of it. MeowServer
+   shows it under **Settings → About**.
+2. **Keep it GPL:** your version stays under the same license, with its
+   source code available to everyone you give it to.
+3. **Rename it:** a modified version may not use the name "MeowServer" or
+   its logo, nor look official or endorsed
+   ([TRADEMARK.md](TRADEMARK.md)). Renaming does not remove the attribution
+   in point 1.
+
+Not required by the license, but asked of everyone who builds on it: say
+that your project is based on MeowServer wherever you present it,
+including announcements and social media posts, not only inside the
+repository. A fork should be easy to recognize as one.
+
+## Credits
+
+- **Originally created by Pustekno (https://pustekno.id) and Puskomedia
+  (https://www.puskomedia.id).** Founder and lead maintainer: Akbar
+  Bahaulloh. Everyone else is in [AUTHORS](AUTHORS) and the git history.
+- **Built with Claude** (Anthropic): much of the code and documentation was
+  written with Claude through Claude Code, and reviewed and tested by the
+  maintainers. Commits it helped with carry a `Co-Authored-By: Claude` line.
+- **Icon** designed with Google Stitch.
+- Written in **Rust**; the window uses **Slint** under its GPL-3.0 license.
+
+MeowServer does not include the programs it runs. It downloads each one
+from its official source when you ask, unmodified and under its own
+license:
+[Caddy](https://caddyserver.com),
+[Nginx](https://nginx.org),
+[Apache HTTP Server](https://httpd.apache.org) (Windows builds by
+[Apache Lounge](https://www.apachelounge.com)),
+[PHP](https://www.php.net),
+[MySQL](https://www.mysql.com),
+[MariaDB](https://mariadb.org),
+[PostgreSQL](https://www.postgresql.org) (Windows builds by EDB),
+[Redis](https://redis.io) (Windows port by
+[redis-windows](https://github.com/redis-windows/redis-windows)),
+[Mailpit](https://mailpit.axllent.org),
+[Composer](https://getcomposer.org),
+[Node.js](https://nodejs.org),
+[Python](https://www.python.org) (builds by
+[python-build-standalone](https://github.com/astral-sh/python-build-standalone)),
+[Go](https://go.dev),
+[Adminer](https://www.adminer.org),
+[phpMyAdmin](https://www.phpmyadmin.net),
+[Xdebug](https://xdebug.org), and PHP extensions from
+[PECL](https://pecl.php.net). Thank you to everyone who makes them.
