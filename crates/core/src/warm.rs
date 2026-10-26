@@ -64,25 +64,50 @@ fn warm_site(layout: &Layout, config: &Config, site: &Site) -> Result<Option<Str
     std::fs::create_dir_all(layout.tmp())?;
     std::fs::write(&script, SCRIPT)?;
 
-    let mut cmd = Command::new(installed.exe("php"));
-    cmd.arg("-c")
-        .arg(&ini)
-        .args(["-d", "opcache.enable_cli=1", "-d", "opcache.file_cache_only=1"])
-        .arg(&script)
-        .arg(&site.path)
-        .env("PHP_INI_SCAN_DIR", php::scan_dirs(layout, &installed)?)
-        .stdin(Stdio::null())
-        .stderr(Stdio::null());
-    low_priority(&mut cmd);
-    let out = cmd.output().context("cannot run PHP")?;
-    let report = String::from_utf8_lossy(&out.stdout).trim().to_owned();
-    if !out.status.success() {
-        anyhow::bail!("{report}"); // tried again on the next start
+    let scan_dirs = php::scan_dirs(layout, &installed)?;
+    // A file that declares a function another file declared ends PHP with
+    // a fatal error; start again after it. What was compiled stays cached.
+    let mut from = 0usize;
+    let mut stopped_at = Vec::new();
+    for _ in 0..MAX_RESTARTS {
+        let mut cmd = Command::new(installed.exe("php"));
+        cmd.arg("-c")
+            .arg(&ini)
+            .args(["-d", "opcache.enable_cli=1", "-d", "opcache.file_cache_only=1"])
+            .arg(&script)
+            .arg(&site.path)
+            .arg(from.to_string())
+            .env("PHP_INI_SCAN_DIR", &scan_dirs)
+            .stdin(Stdio::null())
+            .stderr(Stdio::null());
+        low_priority(&mut cmd);
+        let out = cmd.output().context("cannot run PHP")?;
+        let text = String::from_utf8_lossy(&out.stdout);
+        if let Some(summary) = text.lines().find_map(|l| l.strip_prefix("done ")) {
+            let mut report = summary.to_owned();
+            if !stopped_at.is_empty() {
+                report.push_str(&format!(", {} files restarted around", stopped_at.len()));
+            }
+            std::fs::create_dir_all(stamp_dir(layout))?;
+            std::fs::write(&stamp_file, stamp)?;
+            return Ok(Some(report));
+        }
+        // "@<n>" is printed before file n: the last one is where it stopped.
+        let last = text.lines().rev().find_map(|l| l.strip_prefix('@')?.trim().parse::<usize>().ok());
+        match last {
+            Some(n) if n >= from => {
+                stopped_at.push(n);
+                from = n + 1;
+            }
+            _ => anyhow::bail!("PHP stopped before compiling anything: {}", text.trim()),
+        }
     }
-    std::fs::create_dir_all(stamp_dir(layout))?;
-    std::fs::write(&stamp_file, stamp)?;
-    Ok(Some(report))
+    anyhow::bail!("stopped {MAX_RESTARTS} times; tried again on the next start")
 }
+
+/// Enough for packages that ship one copy of their functions per PHP
+/// version, without looping forever on a broken project.
+const MAX_RESTARTS: usize = 200;
 
 fn stamp_dir(layout: &Layout) -> PathBuf {
     layout.data().join("php").join("opcache").join("warmed")
