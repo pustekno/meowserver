@@ -16,7 +16,9 @@ use crate::platform::{Arch, Os, arch, os};
 use crate::version::Version;
 
 const WINDOWS_BASE: &str = "https://downloads.php.net/~windows/releases/";
-const STATIC_BASE: &str = "https://dl.static-php.dev/static-php-cli/common/";
+/// The "bulk" set: "common" lacks mysqli (WordPress, phpMyAdmin), OPcache
+/// (the warm-up, F47), intl, and sodium. Its PDO SQLite comes with swoole.
+const STATIC_BASE: &str = "https://dl.static-php.dev/static-php-cli/bulk/";
 
 /// `releases.json` lists the latest patch of each supported minor version,
 /// with SHA-256 for every zip. Non-thread-safe (NTS) builds are the right
