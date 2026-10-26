@@ -14,7 +14,8 @@ pub fn json(value: &impl serde::Serialize) -> Result<()> {
     Ok(())
 }
 
-pub fn status(value: &serde_json::Value, as_json: bool) -> Result<()> {
+/// `web_port`: read after the status call, which may have moved it.
+pub fn status(value: &serde_json::Value, as_json: bool, web_port: u16) -> Result<()> {
     if as_json {
         return json(value);
     }
@@ -33,17 +34,17 @@ pub fn status(value: &serde_json::Value, as_json: bool) -> Result<()> {
         println!("{:<16} {state}{restarts}", p.id);
     }
     println!();
-    sites(&status.sites, &status.warnings);
+    sites(&status.sites, &status.warnings, web_port);
     Ok(())
 }
 
-pub fn sites(sites: &[Site], warnings: &[String]) {
+pub fn sites(sites: &[Site], warnings: &[String], web_port: u16) {
     if sites.is_empty() {
         println!("No sites yet. Add a folder to www/ or run `meow link <folder>`.");
     }
-    let width = sites.iter().map(|s| s.host.len()).max().unwrap_or(0) + 8;
+    let width = sites.iter().map(|s| site_url(&s.host, web_port).len()).max().unwrap_or(0);
     for s in sites {
-        let url = format!("http://{}", s.host);
+        let url = site_url(&s.host, web_port);
         let target = match &s.proxy {
             Some(p) => format!("→ {p}"),
             None => s.docroot.display().to_string(),
@@ -60,4 +61,10 @@ pub fn sites(sites: &[Site], warnings: &[String]) {
     for w in warnings {
         println!("warning: {w}");
     }
+}
+
+/// The address to open: the port shows unless it is 80, e.g. after
+/// another program held port 80 and MeowServer moved to 8080.
+pub fn site_url(host: &str, web_port: u16) -> String {
+    if web_port == 80 { format!("http://{host}") } else { format!("http://{host}:{web_port}") }
 }

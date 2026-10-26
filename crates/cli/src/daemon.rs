@@ -7,6 +7,7 @@
 use std::time::{Duration, Instant};
 
 use anyhow::{Result, bail};
+use meow_core::config::Config;
 use meow_core::ipc::{Client, Request};
 use meow_core::layout::Layout;
 use meow_core::platform;
@@ -51,7 +52,10 @@ pub fn quit(layout: &Layout) -> Result<()> {
 
 pub fn status(layout: &Layout, json: bool) -> Result<()> {
     match Client::connect(layout) {
-        Ok(mut client) => print::status(&client.call(Request::Status)?, json),
+        Ok(mut client) => {
+            let status = client.call(Request::Status)?;
+            print::status(&status, json, Config::load(layout)?.port("web", 80))
+        }
         Err(_) => {
             println!("MeowServer is not running. Start it with `meow up`.");
             Ok(())

@@ -16,6 +16,7 @@ use std::process::ExitCode;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use meow_core::config::Config;
 use meow_core::ipc::Request;
 use meow_core::layout::Layout;
 
@@ -210,7 +211,8 @@ fn run(cli: Cli) -> Result<()> {
         Cmd::Up { headless } => {
             let mut client = daemon::ensure(&layout, headless)?;
             let started = client.call(Request::StartAll);
-            print::status(&client.call(Request::Status)?, json)?;
+            let status = client.call(Request::Status)?;
+            print::status(&status, json, Config::load(&layout)?.port("web", 80))?;
             started.map(drop)
         }
         Cmd::Down => daemon::call(&layout, Request::StopAll).map(drop),

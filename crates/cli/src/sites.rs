@@ -19,7 +19,7 @@ pub fn list(layout: &Layout, json: bool) -> Result<()> {
     if json {
         return print::json(&discovery);
     }
-    print::sites(&discovery.sites, &discovery.warnings);
+    print::sites(&discovery.sites, &discovery.warnings, config.port("web", 80));
     Ok(())
 }
 
@@ -38,7 +38,7 @@ pub fn dev(layout: &Layout, action: DevAction) -> Result<()> {
             daemon::call(layout, Request::StartApp { site: site.clone() })?;
             let config = Config::load(layout)?;
             if let Some(s) = site::discover(layout, &config).sites.into_iter().find(|s| s.name == site) {
-                println!("Started. Open http://{}", s.host);
+                println!("Started. Open {}", print::site_url(&s.host, config.port("web", 80)));
                 println!("Its output: {}", meow_core::app::log_file(layout, &site).display());
             }
         }
