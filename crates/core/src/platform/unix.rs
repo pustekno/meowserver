@@ -78,10 +78,34 @@ pub fn listener_pids(port: u16) -> Vec<u32> {
     pids
 }
 
+/// The executable's full path. Asked of the kernel first: `ps -o comm`
+/// shows the process title, which php-fpm, nginx, and postgres rewrite
+/// ("php-fpm: master process (…)"), so their own processes would look
+/// foreign.
 pub fn process_path(pid: u32) -> Option<String> {
+    if let Some(path) = executable(pid) {
+        return Some(path);
+    }
     let out = Command::new("ps").args(["-p", &pid.to_string(), "-o", "comm="]).output().ok()?;
     let name = String::from_utf8_lossy(&out.stdout).trim().to_owned();
     (!name.is_empty()).then_some(name)
+}
+
+#[cfg(target_os = "macos")]
+fn executable(pid: u32) -> Option<String> {
+    let mut buf = vec![0u8; libc::PROC_PIDPATHINFO_MAXSIZE as usize];
+    let len = unsafe { libc::proc_pidpath(pid as libc::c_int, buf.as_mut_ptr().cast(), buf.len() as u32) };
+    if len <= 0 {
+        return None;
+    }
+    buf.truncate(len as usize);
+    String::from_utf8(buf).ok()
+}
+
+#[cfg(not(target_os = "macos"))]
+fn executable(pid: u32) -> Option<String> {
+    let path = std::fs::read_link(format!("/proc/{pid}/exe")).ok()?;
+    Some(path.to_string_lossy().trim_end_matches(" (deleted)").to_owned())
 }
 
 /// Windows only.
@@ -101,8 +125,10 @@ pub fn process_names() -> Vec<(u32, String)> {
         .lines()
         .filter_map(|l| {
             let (pid, name) = l.trim().split_once(char::is_whitespace)?;
-            let name = name.trim().rsplit('/').next()?.to_owned();
-            Some((pid.parse().ok()?, name))
+            let pid = pid.parse().ok()?;
+            // The title may be rewritten, and may hold a path of its own.
+            let name = executable(pid).unwrap_or_else(|| name.trim().to_owned());
+            Some((pid, name.rsplit('/').next()?.to_owned()))
         })
         .collect()
 }
