@@ -273,15 +273,28 @@ pub fn run(layout: &Layout) -> Vec<Check> {
             service::php::Security::Patched => {}
             service::php::Security::Outdated { fixed_in } => {
                 let line = version.line();
+                // php.net builds every security release at once; the static
+                // builds used on macOS and Linux follow days or weeks later.
+                let windows = platform::os() == platform::Os::Windows;
+                let fix = if windows {
+                    format!("meow install php {line}, then remove {version} on the Versions page")
+                } else {
+                    format!(
+                        "`meow list php --available` shows whether static-php-cli has {fixed_in} yet; once it \
+                         does, meow install php {line} and remove {version} on the Versions page"
+                    )
+                };
                 let mut check = Check::problem(
                     format!("PHP {version}"),
                     format!(
                         "lacks security fixes that {fixed_in} has (PHP2Shell, CVE-2026-109618 and \
                          CVE-2026-109619); MeowServer turns off session upload progress for it meanwhile"
                     ),
-                    format!("meow install php {line}, then remove {version} on the Versions page"),
+                    fix,
                 );
-                check.install = Some(format!("php {line}"));
+                if windows {
+                    check.install = Some(format!("php {line}"));
+                }
                 checks.push(check);
             }
             // Old lines stay for old projects; risky once reachable from
