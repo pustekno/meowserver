@@ -3,8 +3,13 @@
 // Additional terms under GPLv3 section 7(b) apply; see NOTICE.
 
 //! GitHub Releases. GitHub publishes a SHA-256 digest for every asset.
+//!
+//! The API answers 60 requests an hour per address without a token, which
+//! a class or an office behind one address uses up. Then the releases come
+//! from the repository's Atom feed instead, which has no such limit but no
+//! digests either.
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use serde::Deserialize;
 
 use super::{Archive, Asset, Provider, Release, sort_newest_first};
@@ -35,6 +40,15 @@ struct ApiAsset {
 
 impl Provider for GitHub {
     fn releases(&self, http: &Http) -> Result<Vec<Release>> {
+        match self.api_releases(http) {
+            Ok(releases) => Ok(releases),
+            Err(api) => self.feed_releases(http).map_err(|feed| anyhow::anyhow!("{api:#}; then {feed:#}")),
+        }
+    }
+}
+
+impl GitHub {
+    fn api_releases(&self, http: &Http) -> Result<Vec<Release>> {
         let url = format!("https://api.github.com/repos/{}/releases?per_page=30", self.repo);
         let api: Vec<ApiRelease> = http.get_json(&url)?;
         let mut out = Vec::new();
@@ -50,6 +64,37 @@ impl Provider for GitHub {
         sort_newest_first(&mut out);
         Ok(out)
     }
+
+    /// The feed lists tags only: a pre-release tag (`v2.11.0-beta.1`) is not
+    /// a version and is skipped, and the asset is assumed to be there.
+    fn feed_releases(&self, http: &Http) -> Result<Vec<Release>> {
+        let url = format!("https://github.com/{}/releases.atom", self.repo);
+        let feed = http.get_text(&url)?;
+        let mut out = Vec::new();
+        for tag in feed_tags(&feed) {
+            let Ok(version) = tag.parse::<Version>() else { continue };
+            let Some((name, archive)) = (self.asset_name)(&version) else { continue };
+            let asset = Asset::new(
+                format!("https://github.com/{}/releases/download/{tag}/{name}", self.repo),
+                archive,
+            );
+            out.push(Release { version, assets: vec![asset] });
+        }
+        sort_newest_first(&mut out);
+        out.dedup_by(|a, b| a.version == b.version);
+        (!out.is_empty()).then_some(out).with_context(|| format!("no releases in {url}"))
+    }
+}
+
+/// The release tags in a GitHub releases feed, from each entry's
+/// `<link … href="https://github.com/<repo>/releases/tag/<tag>"/>`.
+fn feed_tags(feed: &str) -> Vec<String> {
+    feed.split("/releases/tag/")
+        .skip(1)
+        .filter_map(|rest| rest.split('"').next())
+        .filter(|tag| !tag.is_empty() && !tag.contains(['<', '>', '/', ' ']))
+        .map(str::to_owned)
+        .collect()
 }
 
 pub fn caddy() -> GitHub {
@@ -103,5 +148,23 @@ pub fn adminer() -> GitHub {
     GitHub {
         repo: "vrana/adminer",
         asset_name: |v| Some((format!("adminer-{v}.php"), Archive::File { name: "adminer.php".into() })),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tags_come_from_the_feed_links() {
+        let feed = r#"<feed><entry><id>tag:github.com,2008:Repository/1/v6.2.0</id>
+<link rel="alternate" type="text/html" href="https://github.com/vrana/adminer/releases/tag/v6.2.0"/>
+</entry><entry>
+<link rel="alternate" type="text/html" href="https://github.com/vrana/adminer/releases/tag/v6.2.0-beta.1"/>
+</entry><entry>
+<link rel="alternate" type="text/html" href="https://github.com/r/redis/releases/tag/8.10.3"/>
+</entry></feed>"#;
+        assert_eq!(feed_tags(feed), ["v6.2.0", "v6.2.0-beta.1", "8.10.3"]);
+        assert!("v6.2.0-beta.1".parse::<Version>().is_err());
     }
 }
