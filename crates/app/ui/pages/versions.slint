@@ -9,70 +9,72 @@ import { Button, ScrollView } from "std-widgets.slint";
 import { Backend } from "../backend.slint";
 import { Card, NavItem, PageHeader, Theme } from "../widgets.slint";
 
-component Group inherits Text {
-    color: Theme.muted;
-    font-size: 12px;
-    font-weight: 600;
+// A group's heading, with room above it to set the group apart.
+component Group inherits VerticalLayout {
+    in property <string> title;
+    in property <bool> first;
+    padding-top: root.first ? 0 : 12px;
+    padding-bottom: 2px;
+    padding-left: 12px;
+    Text {
+        text: root.title;
+        color: Theme.muted;
+        font-size: 11px;
+        font-weight: 600;
+    }
+}
+
+component Kind inherits NavItem {
+    in property <int> index;
+    height: 30px;
+    label: Backend.kinds[root.index];
+    active: Backend.kind-index == root.index;
+    clicked => {
+        Backend.kind-index = root.index;
+        Backend.select-kind(root.index);
+    }
 }
 
 // Indices into Backend.kinds; the order is fixed in src/main.rs (KINDS).
 component KindList inherits VerticalLayout {
-    spacing: 4px;
+    spacing: 2px;
     alignment: start;
     Group {
-        text: @tr("Web server");
+        title: @tr("Web server");
+        first: true;
     }
-    for i in [1, 2, 3]: NavItem {
-        label: Backend.kinds[i];
-        active: Backend.kind-index == i;
-        clicked => {
-            Backend.kind-index = i;
-            Backend.select-kind(i);
-        }
+    for i in [1, 2, 3]: Kind {
+        index: i;
     }
     Group {
-        text: "PHP";
+        title: "PHP";
     }
-    for i in [0, 10]: NavItem {
-        label: Backend.kinds[i];
-        active: Backend.kind-index == i;
-        clicked => {
-            Backend.kind-index = i;
-            Backend.select-kind(i);
-        }
+    for i in [0, 10]: Kind {
+        index: i;
     }
     Group {
-        text: @tr("Databases");
+        title: @tr("Databases");
     }
-    for i in [4, 5, 6, 13, 14]: NavItem {
-        label: Backend.kinds[i];
-        active: Backend.kind-index == i;
-        clicked => {
-            Backend.kind-index = i;
-            Backend.select-kind(i);
-        }
+    for i in [4, 5, 6, 7]: Kind {
+        index: i;
     }
     Group {
-        text: @tr("Languages");
+        title: @tr("Database tools");
     }
-    for i in [9, 11, 12]: NavItem {
-        label: Backend.kinds[i];
-        active: Backend.kind-index == i;
-        clicked => {
-            Backend.kind-index = i;
-            Backend.select-kind(i);
-        }
+    for i in [13, 14]: Kind {
+        index: i;
     }
     Group {
-        text: @tr("Other");
+        title: @tr("Languages");
     }
-    for i in [7, 8]: NavItem {
-        label: Backend.kinds[i];
-        active: Backend.kind-index == i;
-        clicked => {
-            Backend.kind-index = i;
-            Backend.select-kind(i);
-        }
+    for i in [9, 11, 12]: Kind {
+        index: i;
+    }
+    Group {
+        title: @tr("Mail");
+    }
+    Kind {
+        index: 8;
     }
 }
 
@@ -87,8 +89,12 @@ export component VersionsPage inherits VerticalLayout {
     HorizontalLayout {
         spacing: 16px;
 
-        KindList {
-            width: 170px;
+        // Scrolls when the window is shorter than the list.
+        kinds := ScrollView {
+            width: 180px;
+            KindList {
+                width: kinds.visible-width;
+            }
         }
 
         sv := ScrollView {
@@ -145,26 +151,41 @@ export component VersionsPage inherits VerticalLayout {
                             width: 120px;
                             font-weight: v.active ? 600 : 400;
                         }
-                        Text {
+                        if v.system-dir == "": Text {
                             text: v.active ? @tr("active") : "";
                             vertical-alignment: center;
                             color: Theme.ok;
                             horizontal-stretch: 1;
                         }
-                        Button {
+                        if v.system-dir != "": Text {
+                            text: @tr("System · {}", v.system-dir);
+                            vertical-alignment: center;
+                            color: Theme.muted;
+                            horizontal-stretch: 1;
+                            overflow: elide;
+                        }
+                        if v.system-dir == "": Button {
                             text: @tr("Use");
                             enabled: !v.active && !Backend.busy;
                             clicked => {
                                 Backend.use-version(v.version);
                             }
                         }
-                        Button {
+                        if v.system-dir == "": Button {
                             text: @tr("Remove");
                             enabled: !v.active && !Backend.busy;
                             clicked => {
                                 Backend.uninstall-version(v.version);
                             }
                         }
+                    }
+                    // Languages (indices 9, 11, 12): projects can run on the system's copy.
+                    if Backend.has-system-versions: Text {
+                        text: Backend.kind-index == 9 || Backend.kind-index == 11 || Backend.kind-index == 12
+                            ? @tr("System versions were installed outside MeowServer. Projects can run on them; MeowServer never changes or removes them.")
+                            : @tr("System versions were installed outside MeowServer and are shown for reference. MeowServer runs its own copy and never changes them.");
+                        color: Theme.muted;
+                        wrap: word-wrap;
                     }
                 }
                 Card {

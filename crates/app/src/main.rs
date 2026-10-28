@@ -944,6 +944,13 @@ fn wire(window: &AppWindow, ui: &Ui) {
             }
         }
     });
+    b.on_set_port({
+        let ui = ui.clone();
+        move |service, field, port| {
+            let (service, field, port) = (service.to_string(), field.to_string(), port.to_string());
+            ui.run(move |layout, ui| actions::set_port(layout, ui, &service, &field, &port));
+        }
+    });
     b.on_set_xdebug({
         let ui = ui.clone();
         move |on| {
@@ -1198,10 +1205,41 @@ fn apply(w: &AppWindow, snap: &snapshot::Snapshot, local: &mut Local) {
     b.set_check_updates(c.general.check_updates);
     b.set_xdebug(c.php.xdebug);
     b.set_ca_trusted(meow_core::tls::is_trusted(&w_layout(w)));
+    let ports = port_rows(&w_layout(w), c);
+    // Replacing the rows every refresh would wipe a port being typed.
+    if !b.get_ports().iter().eq(ports.iter().cloned()) {
+        b.set_ports(model(ports));
+    }
 
     local.sites = snap.sites.clone();
     local.apps_running = snap.apps_running.clone();
     show_sites(w, local);
+}
+
+/// Settings' Ports: the web server's, and those of installed services.
+fn port_rows(layout: &Layout, config: &Config) -> Vec<PortRow> {
+    meow_core::engine::port_settings(config)
+        .into_iter()
+        .filter(|p| {
+            Kind::from_id(p.service)
+                .is_none_or(|k| service::select(layout, k, config.version_selector(k.id())).is_some())
+        })
+        .map(|p| PortRow {
+            service: p.service.into(),
+            field: p.field.into(),
+            label: actions::port_label(p.service, p.field).into(),
+            port: p.port.to_string().into(),
+            hint: match p.moved_from {
+                Some(from) if from != p.port => {
+                    t("Moved from {} because another program uses it; back on it once that is free.")
+                        .replace("{}", &from.to_string())
+                }
+                _ if p.port != p.default => t("Usually {}").replace("{}", &p.default.to_string()),
+                _ => String::new(),
+            }
+            .into(),
+        })
+        .collect()
 }
 
 fn show_sites(w: &AppWindow, local: &Local) {
@@ -1325,15 +1363,24 @@ fn load_versions(w: &AppWindow, layout: &Layout) {
     let kind = selected_kind(w);
     let config = Config::load(layout).unwrap_or_default();
     let active = service::select(layout, kind, config.version_selector(kind.id())).map(|i| i.version);
-    let rows = service::installed(layout, kind)
+    let mut rows: Vec<VersionRow> = service::installed(layout, kind)
         .into_iter()
         .map(|i| VersionRow {
             version: i.version.to_string().into(),
             active: Some(&i.version) == active.as_ref(),
             installed: true,
             verified: true,
+            system_dir: SharedString::new(),
         })
         .collect();
+    rows.extend(service::system::found(layout, kind).into_iter().map(|i| VersionRow {
+        version: i.version.to_string().into(),
+        active: false,
+        installed: true,
+        verified: true,
+        system_dir: i.dir.display().to_string().into(),
+    }));
+    b.set_has_system_versions(rows.iter().any(|r| !r.system_dir.is_empty()));
     b.set_installed_versions(model(rows));
     b.set_available_versions(model(Vec::new()));
     b.set_install_progress(SharedString::new());
@@ -1351,6 +1398,7 @@ fn provider_releases(layout: &Layout, kind: Kind) -> Result<Vec<VersionRow>> {
             active: false,
             installed: installed.iter().any(|i| i.version == r.version),
             verified: r.assets.iter().all(|a| a.has_checksum()),
+            system_dir: SharedString::new(),
         })
         .collect())
 }

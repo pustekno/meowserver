@@ -663,6 +663,60 @@ pub fn configured_ports(config: &Config) -> BTreeSet<u16> {
     ports
 }
 
+/// A port people and projects connect to, as Settings lists it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PortSetting {
+    /// `[services.<service>]`: `web`, `mysql`, `mailpit`, …
+    pub service: &'static str,
+    /// `port`, `tls_port`, or `web_port`.
+    pub field: &'static str,
+    pub default: u16,
+    pub port: u16,
+    /// The usual port MeowServer moved it from because something held it.
+    pub moved_from: Option<u16>,
+}
+
+/// Every port a person may change (Laragon's "Services & Ports"), the web
+/// server's first; not the internal ones (PHP pools, Caddy's admin port).
+pub fn port_settings(config: &Config) -> Vec<PortSetting> {
+    [Unit::Web]
+        .into_iter()
+        .chain(Unit::ALL.into_iter().filter(|u| *u != Unit::Web))
+        .flat_map(listening_ports)
+        .filter(|(service, field, _, _)| {
+            *service != "caddy" && (*field != PortField::Tls || config.general.https)
+        })
+        .map(|(service, field, default, _)| PortSetting {
+            service,
+            field: field.key(),
+            default,
+            port: field.get(config, service, default),
+            moved_from: field.moved_from(config, service),
+        })
+        .collect()
+}
+
+/// Sets a port from [`port_settings`] for good: MeowServer no longer moves
+/// it back to the usual one. The default port is stored as no entry.
+pub fn set_port(config: &mut Config, service: &str, field: &str, port: u16) -> Result<()> {
+    let (service, field, default, _) = Unit::ALL
+        .into_iter()
+        .flat_map(listening_ports)
+        .find(|(s, f, _, _)| *s == service && f.key() == field && *s != "caddy")
+        .ok_or_else(|| anyhow!("{service} has no {field} to change"))?;
+    field.set(config, service, port);
+    let settings = config.services.entry(service.into()).or_default();
+    settings.moved_from.remove(field.key());
+    if port == default {
+        match field {
+            PortField::Port => settings.port = None,
+            PortField::Tls => settings.tls_port = None,
+            PortField::Web => settings.web_port = None,
+        }
+    }
+    Ok(())
+}
+
 /// The next port from `from` that nothing listens on and this
 /// configuration does not use, for a new extra database version.
 pub fn free_port(config: &Config, from: u16) -> Option<u16> {
@@ -803,5 +857,34 @@ mod tests {
             ["/Applications/Herd.app/nginx (pid 1065, 1066)", "/opt/homebrew/bin/mysqld (pid 900)"]
         );
         assert!(name_owners(Vec::new()).is_empty());
+    }
+
+    #[test]
+    fn a_port_set_by_hand_stays_and_the_default_is_no_entry() {
+        let mut config = Config::default();
+        config.services.entry("mysql".into()).or_default().port = Some(3307);
+        config.services.entry("mysql".into()).or_default().moved_from.insert("port".into(), 3306);
+        set_port(&mut config, "mysql", "port", 3310).unwrap();
+        assert_eq!(config.port("mysql", 3306), 3310);
+        assert!(config.services["mysql"].moved_from.is_empty());
+        set_port(&mut config, "mysql", "port", 3306).unwrap();
+        assert_eq!(config.services["mysql"].port, None);
+        set_port(&mut config, "mailpit", "web_port", 8030).unwrap();
+        assert_eq!(config.web_port("mailpit", 8025), 8030);
+        assert!(set_port(&mut config, "caddy", "port", 2020).is_err());
+        assert!(set_port(&mut config, "php", "port", 9000).is_err());
+    }
+
+    #[test]
+    fn settings_list_only_ports_people_connect_to() {
+        let mut config = Config::default();
+        let keys = |c: &Config| {
+            port_settings(c).iter().map(|p| format!("{}.{}", p.service, p.field)).collect::<Vec<_>>()
+        };
+        config.general.https = true;
+        assert!(keys(&config).contains(&"web.tls_port".to_string()));
+        assert!(!keys(&config).iter().any(|k| k.starts_with("caddy")));
+        config.general.https = false;
+        assert!(!keys(&config).contains(&"web.tls_port".to_string()));
     }
 }

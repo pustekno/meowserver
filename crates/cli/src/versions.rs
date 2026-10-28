@@ -51,7 +51,8 @@ pub fn list(layout: &Layout, service: &str, available: bool, json: bool) -> Resu
     if json {
         return print::json(&installed);
     }
-    if installed.is_empty() {
+    let system = service::system::found(layout, kind);
+    if installed.is_empty() && system.is_empty() {
         println!("No {service} versions installed. See `meow list {service} --available`.");
     }
     let config = Config::load(layout)?;
@@ -59,6 +60,9 @@ pub fn list(layout: &Layout, service: &str, available: bool, json: bool) -> Resu
     for i in installed {
         let mark = if Some(&i.version) == active.as_ref() { "  (active)" } else { "" };
         println!("{}{mark}", i.version);
+    }
+    for i in system {
+        println!("{}  (system: {})", i.version, i.dir.display());
     }
     Ok(())
 }

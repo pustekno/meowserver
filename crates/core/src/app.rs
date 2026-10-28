@@ -39,7 +39,7 @@ pub fn plan(layout: &Layout, config: &Config, site: &Site) -> Result<ProcessSpec
         let wanted = site.needs.runtime.as_ref().map(|r| r.suggest()).unwrap_or_default();
         bail!("no installed {} fits {}: meow install {} {wanted}", runtime_name(kind), site.name, kind.id());
     };
-    let installed = service::select(layout, kind, Some(line))
+    let installed = service::select_runtime(layout, kind, line)
         .with_context(|| format!("{} {line} is not installed", runtime_name(kind)))?;
     let port = site.app_port.context("no port for this site")?.to_string();
 

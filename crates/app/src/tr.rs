@@ -95,6 +95,14 @@ pub fn t(text: &str) -> String {
         "{} now uses port {}." => "{} sekarang memakai port {}.",
         "Port {} is used by {}. Close that program first." => "Port {} dipakai {}. Tutup program itu dulu.",
         "Port {} is used by MeowServer's {}." => "Port {} dipakai {} milik MeowServer.",
+        "{} is not a port: use a number from 1 to 65535." => "{} bukan port: pakai angka 1 sampai 65535.",
+        "Restarting…" => "Memulai ulang…",
+        "Opened {} in the browser." => "{} dibuka di browser.",
+        "Moved from {} because another program uses it; back on it once that is free." => {
+            "Dipindah dari {} karena dipakai program lain; kembali ke sana setelah port itu bebas."
+        }
+        "Usually {}" => "Biasanya {}",
+        "Mailpit (web inbox)" => "Mailpit (kotak masuk web)",
         "Fix: {}" => "Solusi: {}",
         "Runs on {}, which is not installed." => "Berjalan dengan {}, yang belum terpasang.",
         "Needs {} {}; no installed version fits." => "Butuh {} {}; belum ada versi terpasang yang cocok.",

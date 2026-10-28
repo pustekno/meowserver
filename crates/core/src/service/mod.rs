@@ -13,6 +13,7 @@ pub mod nginx;
 pub mod php;
 pub mod postgres;
 pub mod redis;
+pub mod system;
 pub mod web;
 
 use std::path::{Path, PathBuf};
@@ -178,6 +179,22 @@ pub fn installed(layout: &Layout, kind: Kind) -> Vec<Installed> {
 pub fn select(layout: &Layout, kind: Kind, selector: Option<&str>) -> Option<Installed> {
     let all = installed(layout, kind);
     let best = version::pick(all.iter().map(|i| &i.version), selector)?.clone();
+    all.into_iter().find(|i| i.version == best)
+}
+
+/// Versions a project's runtime (Node.js, Python, Go) can run on:
+/// MeowServer's own, then those installed on the system (PRD F43).
+pub fn runtimes(layout: &Layout, kind: Kind) -> Vec<Installed> {
+    let mut all = installed(layout, kind);
+    all.extend(system::found(layout, kind));
+    all
+}
+
+/// The newest runtime version on `line`, MeowServer's own when the system
+/// has the same version.
+pub fn select_runtime(layout: &Layout, kind: Kind, line: &str) -> Option<Installed> {
+    let all = runtimes(layout, kind);
+    let best = version::pick(all.iter().map(|i| &i.version), Some(line))?.clone();
     all.into_iter().find(|i| i.version == best)
 }
 

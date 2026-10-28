@@ -49,6 +49,19 @@ export struct VersionRow {
     active: bool,
     installed: bool,
     verified: bool,
+    // Installed outside MeowServer: its folder. Empty for MeowServer's own.
+    system-dir: string,
+}
+
+// One port in Settings (Laragon's "Services & Ports").
+export struct PortRow {
+    service: string,
+    // port, tls_port, or web_port.
+    field: string,
+    label: string,
+    port: string,
+    // Moved off its usual port, or not the default.
+    hint: string,
 }
 
 export struct CheckRow {
@@ -145,6 +158,8 @@ export global Backend {
     in property <[string]> kinds;
     in-out property <int> kind-index;
     in property <[VersionRow]> installed-versions;
+    // Some of installed-versions are the system's, not MeowServer's.
+    in property <bool> has-system-versions;
     in property <[VersionRow]> available-versions;
     in property <bool> loading-available;
     in property <string> install-progress;
@@ -177,6 +192,7 @@ export global Backend {
     in property <string> version;
     in property <string> attribution;
     in property <string> root-dir;
+    in property <[PortRow]> ports;
 
     callback start-all();
     callback quit-all();
@@ -238,6 +254,8 @@ export global Backend {
     callback set-start-on-login(bool);
     callback set-check-updates(bool);
     callback set-xdebug(bool);
+    // Service, field, the port as typed.
+    callback set-port(string, string, string);
     callback db-backup(string);
     // HeidiSQL or general.db_tool is there for db-open.
     in property <bool> desktop-db-tool;

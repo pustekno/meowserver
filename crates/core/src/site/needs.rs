@@ -250,10 +250,11 @@ pub fn runtime_name(kind: Kind) -> &'static str {
     }
 }
 
-/// The newest installed line of `runtime` that fits the project.
+/// The newest installed line of `runtime` that fits the project, counting
+/// the system's own Node.js, Python, and Go.
 pub fn pick_runtime(layout: &Layout, runtime: &Runtime) -> Option<String> {
     let mut installed: Vec<crate::version::Version> =
-        service::installed(layout, runtime.kind).into_iter().map(|i| i.version).collect();
+        service::runtimes(layout, runtime.kind).into_iter().map(|i| i.version).collect();
     installed.sort();
     installed.into_iter().rev().map(|v| line_of(runtime.kind, &v)).find(|l| runtime.allows(l))
 }

@@ -117,7 +117,9 @@ pub fn open_db_tool(layout: &Layout, ui: &Ui, tool: Kind, key: &str) -> Result<S
     let url = meow_core::dbtool::url(layout, &config, tool, key)
         .with_context(|| format!("{key} is not installed"))?;
     meow_core::platform::open(std::ffi::OsStr::new(&url))?;
-    Ok(note)
+    // Says where, in case the browser opens behind this window.
+    let opened = t("Opened {} in the browser.").replace("{}", &url);
+    Ok(if note.is_empty() { opened } else { format!("{note} {opened}") })
 }
 
 pub fn quick_setup(layout: &Layout, ui: &Ui) -> Result<()> {
@@ -296,6 +298,57 @@ pub fn db_version(layout: &Layout, unit: &str, line: &str, enable: bool) -> Resu
 /// which closing Laragon does not stop) is stopped first, the way import
 /// does; any other program in the way is named instead.
 pub fn use_port(layout: &Layout, ui: &Ui, kind: Kind, port: u16) -> Result<String> {
+    move_port(layout, ui, kind.id(), "port", port)?;
+    call(layout, Request::Restart { unit: kind.id().into() })?;
+    Ok(t("{} now uses port {}.").replacen("{}", crate::snapshot::title(kind), 1).replacen(
+        "{}",
+        &port.to_string(),
+        1,
+    ))
+}
+
+/// Settings' Ports: changes one of the ports a service listens on and
+/// restarts it if it runs.
+pub fn set_port(layout: &Layout, ui: &Ui, service: &str, field: &str, port: &str) -> Result<String> {
+    let port =
+        port.trim().parse::<u16>().ok().filter(|p| *p > 0).with_context(|| {
+            t("{} is not a port: use a number from 1 to 65535.").replace("{}", port.trim())
+        })?;
+    let config = Config::load(layout)?;
+    let current = meow_core::engine::port_settings(&config)
+        .into_iter()
+        .find(|p| p.service == service && p.field == field)
+        .with_context(|| format!("{service} has no {field} to change"))?;
+    let label = port_label(service, field);
+    if current.port == port && current.moved_from.is_none() {
+        return Ok(String::new());
+    }
+    move_port(layout, ui, service, field, port)?;
+    let snap = crate::snapshot::take(layout);
+    if snap.services.iter().any(|s| s.unit.id() == service && s.running) {
+        ui.progress(t("Restarting…"));
+        let restarted = call(layout, Request::Restart { unit: service.into() });
+        ui.progress(String::new());
+        restarted?;
+    }
+    Ok(t("{} now uses port {}.").replacen("{}", &label, 1).replacen("{}", &port.to_string(), 1))
+}
+
+/// Ports' names in Settings and in messages.
+pub fn port_label(service: &str, field: &str) -> String {
+    match (service, field) {
+        ("web", "tls_port") => t("Web server (HTTPS)"),
+        ("web", _) => t("Web server (HTTP)"),
+        ("mailpit", "web_port") => t("Mailpit (web inbox)"),
+        ("mailpit", _) => t("Mailpit (SMTP)"),
+        _ => Kind::from_id(service)
+            .map_or_else(|| service.to_owned(), |k| crate::snapshot::title(k).to_owned()),
+    }
+}
+
+/// Saves `port` for one of a service's ports, unless another program or
+/// another of MeowServer's servers holds it.
+fn move_port(layout: &Layout, ui: &Ui, service: &str, field: &str, port: u16) -> Result<()> {
     use meow_core::platform;
     let foreign = |port: u16| -> Vec<String> {
         platform::port_owners(port)
@@ -325,31 +378,31 @@ pub fn use_port(layout: &Layout, ui: &Ui, kind: Kind, port: u16) -> Result<Strin
     }
     let mut config = Config::load(layout)?;
     // Another of MeowServer's own servers set to that port.
-    for other in [Kind::Mysql, Kind::Mariadb, Kind::Postgres].into_iter().filter(|k| *k != kind) {
-        let default = if other == Kind::Postgres { 5432 } else { 3306 };
-        let installed = service::select(layout, other, config.version_selector(other.id())).is_some();
-        if installed && config.port(other.id(), default) == port {
-            bail!(
-                "{}",
-                t("Port {} is used by MeowServer's {}.").replacen("{}", &port.to_string(), 1).replacen(
-                    "{}",
-                    crate::snapshot::title(other),
-                    1
-                )
-            );
+    let installed = |service: &str| {
+        Kind::from_id(service)
+            .is_none_or(|k| service::select(layout, k, config.version_selector(k.id())).is_some())
+    };
+    let mut taken: Vec<(String, u16)> = meow_core::engine::port_settings(&config)
+        .into_iter()
+        .filter(|p| !(p.service == service && p.field == field) && installed(p.service))
+        .map(|p| (port_label(p.service, p.field), p.port))
+        .collect();
+    for kind in [Kind::Mysql, Kind::Mariadb] {
+        for (line, port) in config.services.get(kind.id()).map(|s| s.extra.clone()).unwrap_or_default() {
+            taken.push((format!("{} {line}", crate::snapshot::title(kind)), port));
         }
     }
-    let default = if kind == Kind::Postgres { 5432 } else { 3306 };
-    let settings = config.services.entry(kind.id().into()).or_default();
-    settings.port = (port != default).then_some(port);
-    settings.moved_from.remove("port");
+    if let Some((other, _)) = taken.iter().find(|(_, p)| *p == port) {
+        bail!(
+            "{}",
+            t("Port {} is used by MeowServer's {}.")
+                .replacen("{}", &port.to_string(), 1)
+                .replacen("{}", other, 1)
+        );
+    }
+    meow_core::engine::set_port(&mut config, service, field, port)?;
     config.save(layout)?;
-    call(layout, Request::Restart { unit: kind.id().into() })?;
-    Ok(t("{} now uses port {}.").replacen("{}", crate::snapshot::title(kind), 1).replacen(
-        "{}",
-        &port.to_string(),
-        1,
-    ))
+    Ok(())
 }
 
 /// Downloads a PECL extension for one PHP version, turns it on, and

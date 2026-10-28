@@ -136,6 +136,15 @@ msgstr "Ekstensi PHP ini sudah tertanam di dalam programnya."
 msgid "Language"
 msgstr "Bahasa"
 
+msgid "Ports"
+msgstr "Port"
+
+msgid "Projects connect to these. A running service restarts on the new port."
+msgstr "Proyek tersambung ke port ini. Layanan yang sedang berjalan dimulai ulang di port barunya."
+
+msgid "Change"
+msgstr "Ubah"
+
 msgid "Web server"
 msgstr "Web server"
 
@@ -234,6 +243,15 @@ msgstr "aktif"
 msgid "Use"
 msgstr "Pakai"
 
+msgid "System · {}"
+msgstr "Sistem · {}"
+
+msgid "System versions were installed outside MeowServer. Projects can run on them; MeowServer never changes or removes them."
+msgstr "Versi Sistem terpasang di luar MeowServer. Proyek bisa berjalan dengannya; MeowServer tidak pernah mengubah atau menghapusnya."
+
+msgid "System versions were installed outside MeowServer and are shown for reference. MeowServer runs its own copy and never changes them."
+msgstr "Versi Sistem terpasang di luar MeowServer dan hanya ditampilkan sebagai informasi. MeowServer menjalankan salinannya sendiri dan tidak pernah mengubahnya."
+
 msgid "Available"
 msgstr "Tersedia"
 
@@ -310,9 +328,6 @@ msgstr "Mengecek GitHub sekali sehari. Tidak ada yang diunduh atau dikirim."
 msgid "Working…"
 msgstr "Sedang bekerja…"
 
-msgid "Other"
-msgstr "Lainnya"
-
 msgid "No database server yet. Install one:"
 msgstr "Belum ada server database. Pasang salah satu:"
 
@@ -363,6 +378,12 @@ msgstr "Log"
 
 msgid "Languages"
 msgstr "Bahasa pemrograman"
+
+msgid "Database tools"
+msgstr "Alat database"
+
+msgid "Mail"
+msgstr "Email"
 
 msgid "Copy all"
 msgstr "Salin semua"

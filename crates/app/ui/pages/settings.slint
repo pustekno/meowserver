@@ -5,7 +5,7 @@
 // Settings and About (PRD §6.2). About carries the attribution required by
 // NOTICE (GPLv3 section 7(b)); it must stay visible.
 
-import { Button, ComboBox, ScrollView, Switch } from "std-widgets.slint";
+import { Button, ComboBox, LineEdit, ScrollView, Switch } from "std-widgets.slint";
 import { Backend } from "../backend.slint";
 import { Card, Link, PageHeader, Theme } from "../widgets.slint";
 import { ImportChoices } from "import.slint";
@@ -73,6 +73,37 @@ export component SettingsPage inherits VerticalLayout {
                         current-index: Backend.suffix-index;
                         selected => {
                             Backend.set-suffix(self.current-index);
+                        }
+                    }
+                }
+            }
+            Card {
+                Text {
+                    text: @tr("Ports");
+                    font-weight: 600;
+                }
+                Text {
+                    text: @tr("Projects connect to these. A running service restarts on the new port.");
+                    color: Theme.muted;
+                    wrap: word-wrap;
+                }
+                for p in Backend.ports: Row {
+                    label: p.label;
+                    hint: p.hint;
+                    port-edit := LineEdit {
+                        width: 90px;
+                        text: p.port;
+                        input-type: number;
+                        accessible-label: p.label;
+                        accepted(text) => {
+                            Backend.set-port(p.service, p.field, text);
+                        }
+                    }
+                    Button {
+                        text: @tr("Change");
+                        enabled: !Backend.busy && port-edit.text != p.port;
+                        clicked => {
+                            Backend.set-port(p.service, p.field, port-edit.text);
                         }
                     }
                 }
