@@ -9,7 +9,7 @@ Tanpa iklan. Tanpa telemetri. Tanpa akun.
 [English](README.md)
 
 > **Status: pra-rilis.** Semua fitur di bawah sudah jalan dan diuji di
-> Windows 11. Di macOS (Apple silicon), build dari source menjalankan
+> Windows 11. Di macOS (Apple silicon), aplikasinya menjalankan
 > Caddy, PHP, dan Mailpit yang diunduhnya; MySQL, MariaDB, Nginx, Apache,
 > PostgreSQL, dan Redis belum bisa diunduh di sana, tapi build yang
 > ditautkan ke `bin/<layanan>/<versi>/` (misalnya dari Homebrew) dipakai.
@@ -28,6 +28,15 @@ Beberapa langkah yang mengubah Windows sendiri (entri hosts untuk `.test`,
 memercayai sertifikat HTTPS, pengecualian Defender) meminta hak
 administrator sekali dan menampilkan "Penerbit tidak diketahui" karena
 alasan yang sama.
+
+**macOS (Apple silicon):** buka `MeowServer-<versi>-macos-aarch64.dmg` lalu
+seret MeowServer ke Applications. Aplikasinya belum dinotarisasi, jadi saat
+pertama dibuka macOS bilang Apple tidak bisa memverifikasinya: buka
+**System Settings → Privacy & Security** lalu pilih **Open Anyway** (atau
+jalankan `xattr -dr com.apple.quarantine /Applications/MeowServer.app`).
+Aplikasi menyimpan layanan, database, dan pengaturan di
+`~/Library/Application Support/MeowServer` dan menyajikan proyek dari
+`~/Sites`; `.tar.gz` portable menyimpan semuanya di foldernya sendiri.
 
 ## Mulai cepat (Windows)
 

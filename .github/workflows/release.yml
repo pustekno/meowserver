@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Publishes a GitHub Release when a version tag (v0.2.0) is pushed: the
-# Windows installer and the portable zip (PRD §15). Download counts show on
+# Windows installer and the portable zip, then the macOS disk image and
+# portable tar.gz (PRD §15). Download counts show on
 # the release page and through the GitHub API; MeowServer itself sends
 # nothing. 0.x versions are marked as pre-releases.
 name: Release
@@ -49,5 +50,28 @@ jobs:
           Windows: run the setup. It installs for your user only (no administrator rights) into C:\MeowServer, or updates the folder you already have, keeping projects, databases, and settings. The zip is the same program without an installer.
 
           Not code-signed yet, so Windows SmartScreen and the UAC prompt show "Unknown publisher".
+
+          macOS (Apple silicon): open the .dmg and drag MeowServer to Applications. It is not notarized yet: on first open choose System Settings > Privacy & Security > Open Anyway (or run ``xattr -dr com.apple.quarantine /Applications/MeowServer.app``). The app keeps its data in ~/Library/Application Support/MeowServer and serves projects from ~/Sites; the .tar.gz is the portable folder.
           "@
           gh release create $tag (Get-ChildItem dist/*-setup.exe, dist/*.zip) --title "MeowServer $($tag.TrimStart('v'))" --notes $notes --generate-notes $pre
+
+  macos:
+    name: macOS disk image and tar.gz
+    needs: windows
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: The tag matches the version being built
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          [ "v$version" = "${{ github.ref_name }}" ] || { echo "tag ${{ github.ref_name }} but Cargo.toml says $version"; exit 1; }
+      - name: cargo xtask dist
+        run: |
+          cargo xtask dist
+          ls dist/*.dmg
+      - name: Add to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.ref_name }}" dist/*.dmg dist/*.tar.gz

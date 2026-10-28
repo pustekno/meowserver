@@ -11,21 +11,39 @@ use anyhow::{Context, Result};
 #[derive(Debug, Clone)]
 pub struct Layout {
     root: PathBuf,
+    packaged: bool,
 }
 
 impl Layout {
-    /// `MEOW_HOME` if set, otherwise the folder holding the running executable.
+    /// `MEOW_HOME` if set; otherwise the folder holding the running
+    /// executable, or `~/Library/Application Support/MeowServer` when that
+    /// executable is inside a macOS app bundle, which must stay unchanged
+    /// (its signature covers it, and an update replaces it whole).
     pub fn discover() -> Result<Self> {
         if let Some(home) = std::env::var_os("MEOW_HOME") {
             return Ok(Self::at(PathBuf::from(home)));
         }
         let exe = std::env::current_exe().context("cannot locate the running executable")?;
         let dir = exe.parent().context("the executable has no parent folder")?;
+        if in_app_bundle(dir) {
+            let home = std::env::var_os("HOME").context("HOME is not set")?;
+            let root = Path::new(&home).join("Library").join("Application Support").join("MeowServer");
+            return Ok(Self { root, packaged: true });
+        }
         Ok(Self::at(dir.to_path_buf()))
     }
 
     pub fn at(root: PathBuf) -> Self {
-        Self { root }
+        Self { root, packaged: false }
+    }
+
+    /// Projects folder for a new `meow.toml`: `www/` in a portable folder,
+    /// `~/Sites` for the macOS app, whose root is hidden in `~/Library`.
+    pub fn default_www(&self) -> PathBuf {
+        match std::env::var_os("HOME") {
+            Some(home) if self.packaged => Path::new(&home).join("Sites"),
+            _ => PathBuf::from("www"),
+        }
     }
 
     pub fn root(&self) -> &Path {
@@ -80,5 +98,28 @@ impl Layout {
             std::fs::create_dir_all(&dir).with_context(|| format!("cannot create {}", dir.display()))?;
         }
         Ok(())
+    }
+}
+
+/// `…/Name.app/Contents/MacOS`.
+fn in_app_bundle(dir: &Path) -> bool {
+    cfg!(target_os = "macos")
+        && dir.file_name().is_some_and(|n| n == "MacOS")
+        && dir.parent().is_some_and(|contents| {
+            contents.file_name().is_some_and(|n| n == "Contents")
+                && contents.parent().and_then(Path::extension).is_some_and(|e| e == "app")
+        })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn app_bundle_is_recognised_on_macos_only() {
+        let inside = Path::new("/Applications/MeowServer.app/Contents/MacOS");
+        assert_eq!(in_app_bundle(inside), cfg!(target_os = "macos"));
+        assert!(!in_app_bundle(Path::new("/Users/me/MeowServer")));
+        assert!(!in_app_bundle(Path::new("/Users/me/Contents/MacOS")));
     }
 }

@@ -9,7 +9,7 @@ No ads. No telemetry. No account.
 [Bahasa Indonesia](README.id.md)
 
 > **Status: pre-release.** Everything below works and is tested on
-> Windows 11. On macOS (Apple silicon) a build from source runs Caddy,
+> Windows 11. On macOS (Apple silicon) the app runs Caddy,
 > PHP, and Mailpit, which it downloads; MySQL, MariaDB, Nginx, Apache,
 > PostgreSQL, and Redis have no download there yet, but a build linked
 > into `bin/<service>/<version>/` (e.g. from Homebrew) is used. Linux
@@ -27,6 +27,16 @@ your PC": choose **More info → Run anyway**. The few steps that change
 Windows itself (hosts entries for `.test`, trusting the HTTPS certificate,
 Defender exclusions) ask for administrator rights once and show "Unknown
 publisher" for the same reason.
+
+**macOS (Apple silicon):** open `MeowServer-<version>-macos-aarch64.dmg`
+and drag MeowServer to Applications. It is not notarized yet, so the first
+open says Apple could not verify it: open **System Settings → Privacy &
+Security** and choose **Open Anyway** (or run
+`xattr -dr com.apple.quarantine /Applications/MeowServer.app`). The app
+keeps its services, databases, and settings in
+`~/Library/Application Support/MeowServer` and serves projects from
+`~/Sites`; the portable `.tar.gz` keeps everything in its own folder
+instead.
 
 ## Quick start (Windows)
 

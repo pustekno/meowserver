@@ -6,7 +6,8 @@
 //! folder (PRD §12, §15) into `dist/`: a `.zip` on Windows, `.tar.gz`
 //! elsewhere. On Windows it also builds the installer from
 //! `packaging/windows/meowserver.iss` when Inno Setup 6 is installed (or
-//! `ISCC` points at `ISCC.exe`). Signing comes on top of these.
+//! `ISCC` points at `ISCC.exe`). On macOS it also builds `MeowServer.app`
+//! (signed ad hoc) inside a `.dmg`. Signing comes on top of these.
 
 use std::fs::File;
 use std::path::{Path, PathBuf};
@@ -14,8 +15,12 @@ use std::process::Command;
 
 use anyhow::{Context, Result, bail};
 
-const BINARIES: [&str; 3] = ["meowd", "meowserver", "meow"];
-const DOCS: [&str; 6] = ["LICENSE", "NOTICE", "AUTHORS", "README.md", "README.id.md", "TRADEMARK.md"];
+#[cfg(target_os = "macos")]
+mod macos;
+
+pub(crate) const BINARIES: [&str; 3] = ["meowd", "meowserver", "meow"];
+pub(crate) const DOCS: [&str; 6] =
+    ["LICENSE", "NOTICE", "AUTHORS", "README.md", "README.id.md", "TRADEMARK.md"];
 
 fn main() -> Result<()> {
     match std::env::args().nth(1).as_deref() {
@@ -68,6 +73,8 @@ fn dist() -> Result<()> {
 
     let archive = if cfg!(windows) { pack_zip(&out)? } else { pack_tar_gz(&out)? };
     report(&archive)?;
+    #[cfg(target_os = "macos")]
+    report(&macos::dmg(&root, &out, &name)?)?;
     if cfg!(windows) {
         match iscc() {
             Some(iscc) => report(&installer(&root, &iscc, &out, &name)?)?,
@@ -174,7 +181,7 @@ fn workspace_root() -> PathBuf {
 
 /// `dir` plus a suffix. Not `with_extension`: the version's dots would be
 /// taken for an extension.
-fn sibling(dir: &Path, suffix: &str) -> PathBuf {
+pub(crate) fn sibling(dir: &Path, suffix: &str) -> PathBuf {
     let mut name = dir.as_os_str().to_owned();
     name.push(suffix);
     PathBuf::from(name)

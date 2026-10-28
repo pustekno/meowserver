@@ -209,7 +209,11 @@ impl Config {
         let path = layout.config_file();
         let text = match std::fs::read_to_string(&path) {
             Ok(text) => text,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Self::default()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                let mut config = Self::default();
+                config.general.www = layout.default_www();
+                return Ok(config);
+            }
             Err(e) => return Err(e).with_context(|| format!("cannot read {}", path.display())),
         };
         // Notepad and PowerShell 5 save UTF-8 with a byte-order mark, which

@@ -59,7 +59,14 @@ fn run() -> Result<()> {
         return run_headless(&layout, engine, events_rx);
     }
 
-    let event_loop = EventLoopBuilder::<UserEvent>::with_user_event().build();
+    #[allow(unused_mut)]
+    let mut event_loop = EventLoopBuilder::<UserEvent>::with_user_event().build();
+    // A menu-bar icon only: no Dock icon beside the window's own.
+    #[cfg(target_os = "macos")]
+    {
+        use tao::platform::macos::{ActivationPolicy, EventLoopExtMacOS};
+        event_loop.set_activation_policy(ActivationPolicy::Accessory);
+    }
     let proxy = event_loop.create_proxy();
 
     serve_ipc(&layout, engine.clone(), {
