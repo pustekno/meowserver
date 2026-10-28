@@ -13,7 +13,9 @@ Tanpa iklan. Tanpa telemetri. Tanpa akun.
 > Caddy, PHP, dan Mailpit yang diunduhnya; MySQL, MariaDB, Nginx, Apache,
 > PostgreSQL, dan Redis belum bisa diunduh di sana, tapi build yang
 > ditautkan ke `bin/<layanan>/<versi>/` (misalnya dari Homebrew) dipakai.
-> Build Linux sudah bisa dikompilasi tapi belum dijalankan. Lihat
+> Di Linux (Ubuntu 24.04, x86_64 dan arm64) jendela, tray, Caddy, PHP, dan
+> Composer jalan, dan MariaDB bisa diunduh di x86_64; MySQL, Nginx, Apache,
+> PostgreSQL, dan Redis juga perlu build yang ditautkan ke `bin/`. Lihat
 > [`docs/PRD.md`](docs/PRD.md) §16.
 
 ## Unduh
@@ -28,6 +30,18 @@ Beberapa langkah yang mengubah Windows sendiri (entri hosts untuk `.test`,
 memercayai sertifikat HTTPS, pengecualian Defender) meminta hak
 administrator sekali dan menampilkan "Penerbit tidak diketahui" karena
 alasan yang sama.
+
+**Linux (x86_64, arm64; glibc 2.35+, misalnya Ubuntu 22.04 ke atas):**
+pasang `.deb` dengan `sudo apt install ./MeowServer-<versi>-linux-x86_64.deb`
+lalu buka MeowServer dari menu aplikasi (atau jalankan `meowserver`; CLI-nya
+`meow`). Bisa juga jadikan `MeowServer-<versi>-linux-x86_64.AppImage`
+executable lalu jalankan; `./MeowServer….AppImage meow status` menjalankan
+CLI. Keduanya menyimpan data di `~/.local/share/meowserver` dan menyajikan
+proyek dari `~/www`; `.tar.gz` portable menyimpan semuanya di foldernya
+sendiri. Tray butuh host AppIndicator (GNOME: ekstensi "AppIndicator and
+KStatusNotifierItem Support", sudah aktif bawaan di Ubuntu). Linux hanya
+mengizinkan root membuka port di bawah 1024, jadi web server pindah ke 8080
+dan 8443 kecuali `net.ipv4.ip_unprivileged_port_start` mengizinkannya.
 
 **macOS (Apple silicon):** buka `MeowServer-<versi>-macos-aarch64.dmg` lalu
 seret MeowServer ke Applications. Aplikasinya belum dinotarisasi, jadi saat

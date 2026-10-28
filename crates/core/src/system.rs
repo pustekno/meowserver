@@ -50,10 +50,15 @@ pub fn set_login_item(layout: &Layout, enabled: bool) -> Result<()> {
             let desktop = home()?.join(".config/autostart/meowserver.desktop");
             if enabled {
                 std::fs::create_dir_all(desktop.parent().unwrap())?;
+                // An AppImage's files exist only while it runs: start
+                // `meowd` through the AppImage itself (its AppRun).
+                let command = match std::env::var_os("APPIMAGE") {
+                    Some(image) => format!("\"{}\" meowd", Path::new(&image).display()),
+                    None => format!("\"{}\"", meowd.display()),
+                };
                 let body = format!(
-                    "[Desktop Entry]\nType=Application\nName=MeowServer\nExec=env MEOW_HOME=\"{}\" \"{}\"\nX-GNOME-Autostart-enabled=true\n",
+                    "[Desktop Entry]\nType=Application\nName=MeowServer\nExec=env MEOW_HOME=\"{}\" {command}\nX-GNOME-Autostart-enabled=true\n",
                     layout.root().display(),
-                    meowd.display()
                 );
                 std::fs::write(&desktop, body)?;
             } else if login_item_here(layout) {
@@ -84,9 +89,15 @@ pub fn login_item_here(layout: &Layout) -> bool {
             .ok()
             .and_then(|h| std::fs::read_to_string(h.join(".config/autostart/meowserver.desktop")).ok()),
     };
+    let Some(text) = registered else { return false };
+    if os() != Os::Windows {
+        // Both name the folder as MEOW_HOME; in a package `meowd` is not in it.
+        let root = layout.root().display();
+        return text.contains(&format!("<string>{root}</string>"))
+            || text.contains(&format!("MEOW_HOME=\"{root}\""));
+    }
     let meowd = layout.root().join(format!("meowd{}", crate::platform::EXE_SUFFIX));
-    let meowd = meowd.to_string_lossy().to_lowercase();
-    registered.is_some_and(|text| text.to_lowercase().contains(&meowd))
+    text.to_lowercase().contains(&meowd.to_string_lossy().to_lowercase())
 }
 
 /// Removes everything MeowServer changed outside its folder: hosts entries,

@@ -7,9 +7,9 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 
-use crate::{BINARIES, DOCS, sibling};
+use crate::{BINARIES, DOCS, run, sibling};
 
 /// `MeowServer.app` beside the portable folder, then a `.dmg` holding it
 /// and a link to /Applications. The app keeps its data in
@@ -44,14 +44,6 @@ pub fn dmg(root: &Path, folder: &Path, name: &str) -> Result<PathBuf> {
         .arg(&image))?;
     std::fs::remove_dir_all(&stage)?;
     Ok(image)
-}
-
-fn run(cmd: &mut Command) -> Result<()> {
-    let status = cmd.status().with_context(|| format!("running {:?}", cmd.get_program()))?;
-    if !status.success() {
-        bail!("{:?} failed", cmd.get_program());
-    }
-    Ok(())
 }
 
 fn info_plist(version: &str) -> String {
@@ -110,7 +102,7 @@ fn icns() -> Result<Vec<u8>> {
     ];
     let mut body = Vec::new();
     for (kind, size) in TYPES {
-        let image = png(size, &branding::cat(size, branding::ORANGE))?;
+        let image = crate::png::encode(size, &branding::cat(size, branding::ORANGE))?;
         body.extend(kind);
         body.extend((image.len() as u32 + 8).to_be_bytes());
         body.extend(image);
@@ -119,32 +111,4 @@ fn icns() -> Result<Vec<u8>> {
     icns.extend((body.len() as u32 + 8).to_be_bytes());
     icns.extend(body);
     Ok(icns)
-}
-
-/// A minimal RGBA PNG.
-fn png(size: u32, rgba: &[u8]) -> Result<Vec<u8>> {
-    use std::io::Write;
-    fn chunk(out: &mut Vec<u8>, kind: &[u8; 4], data: &[u8]) {
-        out.extend((data.len() as u32).to_be_bytes());
-        let mut crc = flate2::Crc::new();
-        crc.update(kind);
-        crc.update(data);
-        out.extend(kind);
-        out.extend(data);
-        out.extend(crc.sum().to_be_bytes());
-    }
-    let mut header = Vec::new();
-    header.extend(size.to_be_bytes());
-    header.extend(size.to_be_bytes());
-    header.extend([8, 6, 0, 0, 0]); // 8-bit RGBA, no interlace
-    let mut z = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::best());
-    for row in rgba.chunks(size as usize * 4) {
-        z.write_all(&[0])?; // no filter
-        z.write_all(row)?;
-    }
-    let mut out = b"\x89PNG\r\n\x1a\n".to_vec();
-    chunk(&mut out, b"IHDR", &header);
-    chunk(&mut out, b"IDAT", &z.finish()?);
-    chunk(&mut out, b"IEND", &[]);
-    Ok(out)
 }

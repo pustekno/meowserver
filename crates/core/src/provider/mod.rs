@@ -23,7 +23,7 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
 use crate::http::Http;
-use crate::platform::{Os, os};
+use crate::platform::{Arch, Os, arch, os};
 use crate::service::Kind;
 use crate::version::Version;
 
@@ -89,7 +89,8 @@ pub fn for_service(kind: Kind) -> Option<Box<dyn Provider>> {
         Kind::Nginx if windows => Box::new(nginx::Windows),
         Kind::Apache if windows => Box::new(apache::ApacheLounge),
         Kind::Mysql if windows => Box::new(mysql::Curated),
-        Kind::Mariadb if windows || linux => Box::new(mariadb::Rest),
+        // MariaDB publishes Linux binaries for x86_64 only.
+        Kind::Mariadb if windows || (linux && arch() == Arch::X64) => Box::new(mariadb::Rest),
         Kind::Postgres if windows => Box::new(postgres::Edb),
         Kind::Redis if windows => Box::new(github::redis_windows()),
         Kind::Mailpit => Box::new(github::mailpit()),

@@ -164,7 +164,7 @@ impl Default for General {
             www: PathBuf::from("www"),
             parked: Vec::new(),
             start_on_login: false,
-            autostart: vec!["web".into(), "php".into(), "mysql".into()],
+            autostart: vec!["web".into(), "php".into(), default_database().into()],
             editor: None,
             db_tool: None,
             db_admin: None,
@@ -173,6 +173,18 @@ impl Default for General {
             https: true,
             check_updates: false,
         }
+    }
+}
+
+/// MySQL, as in Laragon; MariaDB where only MariaDB can be downloaded
+/// (Linux x86_64).
+fn default_database() -> &'static str {
+    use crate::provider::for_service;
+    use crate::service::Kind;
+    if for_service(Kind::Mysql).is_none() && for_service(Kind::Mariadb).is_some() {
+        "mariadb"
+    } else {
+        "mysql"
     }
 }
 

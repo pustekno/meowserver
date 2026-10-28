@@ -7,7 +7,9 @@
 //! elsewhere. On Windows it also builds the installer from
 //! `packaging/windows/meowserver.iss` when Inno Setup 6 is installed (or
 //! `ISCC` points at `ISCC.exe`). On macOS it also builds `MeowServer.app`
-//! (signed ad hoc) inside a `.dmg`. Signing comes on top of these.
+//! (signed ad hoc) inside a `.dmg`; on Linux a `.deb` when `dpkg-deb` is
+//! installed and an AppImage when `appimagetool` is (or `APPIMAGETOOL`
+//! points at it). Signing comes on top of these.
 
 use std::fs::File;
 use std::path::{Path, PathBuf};
@@ -15,8 +17,12 @@ use std::process::Command;
 
 use anyhow::{Context, Result, bail};
 
+#[cfg(target_os = "linux")]
+mod linux;
 #[cfg(target_os = "macos")]
 mod macos;
+#[cfg(unix)]
+mod png;
 
 pub(crate) const BINARIES: [&str; 3] = ["meowd", "meowserver", "meow"];
 pub(crate) const DOCS: [&str; 6] =
@@ -42,6 +48,7 @@ fn dist() -> Result<()> {
         bail!("release build failed");
     }
 
+    let target = std::env::var_os("CARGO_TARGET_DIR").map_or_else(|| root.join("target"), PathBuf::from);
     let version = env!("CARGO_PKG_VERSION");
     let name = format!("MeowServer-{version}-{}-{}", std::env::consts::OS, std::env::consts::ARCH);
     let out = root.join("dist").join(&name);
@@ -56,7 +63,7 @@ fn dist() -> Result<()> {
 
     for bin in BINARIES {
         let file = format!("{bin}{}", std::env::consts::EXE_SUFFIX);
-        std::fs::copy(root.join("target").join("release").join(&file), out.join(&file))
+        std::fs::copy(target.join("release").join(&file), out.join(&file))
             .with_context(|| format!("copying {file}"))?;
     }
     for doc in DOCS {
@@ -75,11 +82,24 @@ fn dist() -> Result<()> {
     report(&archive)?;
     #[cfg(target_os = "macos")]
     report(&macos::dmg(&root, &out, &name)?)?;
+    #[cfg(target_os = "linux")]
+    for package in linux::packages(&root, &out, &name)? {
+        report(&package)?;
+    }
     if cfg!(windows) {
         match iscc() {
             Some(iscc) => report(&installer(&root, &iscc, &out, &name)?)?,
             None => println!("Inno Setup 6 not found: installer skipped (install it or set ISCC)"),
         }
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+pub(crate) fn run(cmd: &mut Command) -> Result<()> {
+    let status = cmd.status().with_context(|| format!("running {:?}", cmd.get_program()))?;
+    if !status.success() {
+        bail!("{:?} failed", cmd.get_program());
     }
     Ok(())
 }
@@ -187,7 +207,7 @@ pub(crate) fn sibling(dir: &Path, suffix: &str) -> PathBuf {
     PathBuf::from(name)
 }
 
-fn files(dir: &Path) -> Result<Vec<PathBuf>> {
+pub(crate) fn files(dir: &Path) -> Result<Vec<PathBuf>> {
     let mut out = Vec::new();
     for entry in std::fs::read_dir(dir)? {
         let path = entry?.path();

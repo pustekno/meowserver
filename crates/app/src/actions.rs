@@ -123,12 +123,18 @@ pub fn open_db_tool(layout: &Layout, ui: &Ui, tool: Kind, key: &str) -> Result<S
 }
 
 pub fn quick_setup(layout: &Layout, ui: &Ui) -> Result<()> {
-    // MySQL has no download on macOS: the rest of the stack still installs.
+    // MySQL has no download on macOS or Linux: Linux gets MariaDB in its
+    // place; otherwise the rest of the stack still installs.
     let mysql = provider::for_service(Kind::Mysql).is_some();
+    let mariadb = !mysql
+        && service::select(layout, Kind::Mysql, None).is_none()
+        && provider::for_service(Kind::Mariadb).is_some();
     install(layout, ui, Kind::Caddy, None)?;
     install(layout, ui, Kind::Php, None)?;
     if mysql {
         install(layout, ui, Kind::Mysql, Some("8.4"))?;
+    } else if mariadb {
+        install(layout, ui, Kind::Mariadb, None)?;
     }
     if let Err(e) = install(layout, ui, Kind::Composer, None) {
         log_warn(&format!("Composer: {e:#}"));
@@ -136,6 +142,10 @@ pub fn quick_setup(layout: &Layout, ui: &Ui) -> Result<()> {
     let mut config = Config::load(layout)?;
     if mysql {
         config.versions.insert("mysql".into(), "8.4".into());
+    } else if mariadb {
+        for unit in config.general.autostart.iter_mut().filter(|u| *u == "mysql") {
+            *unit = "mariadb".into();
+        }
     } else if service::select(layout, Kind::Mysql, None).is_none() {
         // Or every start would report MySQL as missing.
         config.general.autostart.retain(|unit| unit != "mysql");

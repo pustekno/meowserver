@@ -12,8 +12,10 @@ No ads. No telemetry. No account.
 > Windows 11. On macOS (Apple silicon) the app runs Caddy,
 > PHP, and Mailpit, which it downloads; MySQL, MariaDB, Nginx, Apache,
 > PostgreSQL, and Redis have no download there yet, but a build linked
-> into `bin/<service>/<version>/` (e.g. from Homebrew) is used. Linux
-> builds compile but have not been run yet. See
+> into `bin/<service>/<version>/` (e.g. from Homebrew) is used. On Linux
+> (Ubuntu 24.04, x86_64 and arm64) the window, tray, Caddy, PHP, and
+> Composer run, and MariaDB downloads on x86_64; MySQL, Nginx, Apache,
+> PostgreSQL, and Redis need a build linked into `bin/` there too. See
 > [`docs/PRD.md`](docs/PRD.md) §16 for the plan.
 
 ## Download
@@ -27,6 +29,18 @@ your PC": choose **More info → Run anyway**. The few steps that change
 Windows itself (hosts entries for `.test`, trusting the HTTPS certificate,
 Defender exclusions) ask for administrator rights once and show "Unknown
 publisher" for the same reason.
+
+**Linux (x86_64, arm64; glibc 2.35+, e.g. Ubuntu 22.04 or newer):**
+install the `.deb` with `sudo apt install ./MeowServer-<version>-linux-x86_64.deb`
+and open MeowServer from the app menu (or run `meowserver`; the CLI is
+`meow`). Or make `MeowServer-<version>-linux-x86_64.AppImage` executable
+and run it; `./MeowServer….AppImage meow status` runs the CLI. Both keep
+their data in `~/.local/share/meowserver` and serve projects from `~/www`;
+the portable `.tar.gz` keeps everything in its own folder. The tray needs
+an AppIndicator host (GNOME: the "AppIndicator and KStatusNotifierItem
+Support" extension, on by default in Ubuntu). Linux lets only root open
+ports below 1024, so the web server moves to 8080 and 8443 unless
+`net.ipv4.ip_unprivileged_port_start` allows them.
 
 **macOS (Apple silicon):** open `MeowServer-<version>-macos-aarch64.dmg`
 and drag MeowServer to Applications. It is not notarized yet, so the first
