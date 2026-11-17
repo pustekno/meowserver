@@ -197,6 +197,13 @@ pub fn language() -> String {
     imp::locale().split(['-', '_', '.']).next().unwrap_or("en").to_ascii_lowercase()
 }
 
+/// False when no graphical session can show a tray icon or window: on
+/// Linux, neither `DISPLAY` nor `WAYLAND_DISPLAY` is set (a server, SSH, or
+/// a systemd service). `meowd` then runs headless instead of failing.
+pub fn has_display() -> bool {
+    imp::has_display()
+}
+
 pub const EXE_SUFFIX: &str = std::env::consts::EXE_SUFFIX;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

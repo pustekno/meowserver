@@ -45,12 +45,18 @@ fn main() {
 }
 
 fn run() -> Result<()> {
-    let headless = std::env::args().any(|a| a == "--headless");
+    let asked = std::env::args().any(|a| a == "--headless");
+    // Without a graphical session the tray's event loop panics, so a
+    // server, an SSH login, or a systemd service gets headless instead.
+    let headless = asked || !platform::has_display();
     let layout = Layout::discover()?;
     layout.ensure()?;
     logging::init(&layout.logs().join("meowd.log"), cfg!(debug_assertions) || headless)?;
     report::install_panic_hook(&layout);
     log::info!("meowd {} starting in {}", meow_core::VERSION, layout.root().display());
+    if headless && !asked {
+        log::info!("no graphical session (DISPLAY and WAYLAND_DISPLAY unset): running without a tray");
+    }
 
     let (events_tx, events_rx) = mpsc::channel::<supervisor::Event>();
     let engine = Arc::new(Engine::new(layout.clone(), Some(events_tx)));

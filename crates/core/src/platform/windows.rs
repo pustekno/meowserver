@@ -159,6 +159,10 @@ fn resume_threads(pid: u32) -> io::Result<()> {
 }
 
 /// The user's locale name, e.g. `id-ID`.
+pub fn has_display() -> bool {
+    true
+}
+
 pub fn locale() -> String {
     use windows_sys::Win32::Globalization::GetUserDefaultLocaleName;
     let mut buf = [0u16; 85];
