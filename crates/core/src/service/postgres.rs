@@ -6,7 +6,7 @@
 //! only (PRD §9.10).
 
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::Duration;
 
@@ -15,7 +15,7 @@ use anyhow::{Context, Result, bail};
 use super::{Installed, Kind, datadir};
 use crate::config::Config;
 use crate::layout::Layout;
-use crate::platform::EXE_SUFFIX;
+use crate::platform::{Os, os};
 use crate::supervisor::{Invocation, ProcessSpec, Restart};
 
 pub const DEFAULT_PORT: u16 = 5432;
@@ -31,19 +31,25 @@ pub fn plan(layout: &Layout, config: &Config) -> Result<ProcessSpec> {
     if datadir::check(&data, Kind::Postgres, &installed.version)? {
         initialize(layout, &installed, &data)?;
     }
-    let bin = |name: &str| installed.dir.join("bin").join(format!("{name}{EXE_SUFFIX}"));
+    let bin = |name: &str| installed.program(name);
     let port = config.port("postgres", DEFAULT_PORT).to_string();
+    let mut args: Vec<std::ffi::OsString> = vec![
+        "-D".into(),
+        data.clone().into(),
+        "-p".into(),
+        port.into(),
+        "-c".into(),
+        "listen_addresses=127.0.0.1,::1".into(),
+    ];
+    if os() != Os::Windows {
+        let mut dir = std::ffi::OsString::from("unix_socket_directories=");
+        dir.push(socket_dir(layout));
+        args.extend(["-c".into(), dir]);
+    }
     Ok(ProcessSpec {
         id: "postgres".into(),
         program: bin("postgres"),
-        args: vec![
-            "-D".into(),
-            data.clone().into(),
-            "-p".into(),
-            port.into(),
-            "-c".into(),
-            "listen_addresses=127.0.0.1,::1".into(),
-        ],
+        args,
         env: Vec::new(),
         cwd: Some(installed.dir.clone()),
         log: layout.logs().join("postgres.log"),
@@ -56,12 +62,22 @@ pub fn plan(layout: &Layout, config: &Config) -> Result<ProcessSpec> {
     })
 }
 
+/// Where the server puts its Unix socket. The built-in place is often
+/// owned by root (Debian's `/var/run/postgresql`), so a system PostgreSQL
+/// could not start there (PRD F4). MeowServer's tools connect over TCP;
+/// this only has to be writable and short: macOS allows 104 bytes for
+/// the socket's full path, `.s.PGSQL.<port>` included.
+fn socket_dir(layout: &Layout) -> PathBuf {
+    let tmp = layout.tmp();
+    if tmp.as_os_str().len() < 80 { tmp } else { PathBuf::from("/tmp") }
+}
+
 fn initialize(layout: &Layout, installed: &Installed, data: &Path) -> Result<()> {
     std::fs::create_dir_all(data)?;
     let log_path = layout.logs().join("postgres-init.log");
     let log = crate::logging::open_rotated(&log_path)?;
     log::info!("initializing PostgreSQL data in {}", data.display());
-    let mut cmd = crate::platform::command(installed.dir.join("bin").join(format!("initdb{EXE_SUFFIX}")));
+    let mut cmd = crate::platform::command(installed.program("initdb"));
     cmd.args(["-U", "postgres", "-A", "trust", "-E", "UTF8", "--locale=C", "-D"])
         .arg(data)
         .stdin(Stdio::null())

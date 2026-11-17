@@ -18,7 +18,7 @@ use flate2::write::GzEncoder;
 
 use crate::config::Config;
 use crate::layout::Layout;
-use crate::platform::{EXE_SUFFIX, Os, os};
+use crate::platform::{Os, os};
 use crate::service::{self, Installed, Kind, datadir, mysql, postgres};
 
 fn active(layout: &Layout, config: &Config, kind: Kind) -> Result<Installed> {
@@ -32,7 +32,7 @@ fn active(layout: &Layout, config: &Config, kind: Kind) -> Result<Installed> {
 fn tool(installed: &Installed, names: &[&str]) -> Result<PathBuf> {
     names
         .iter()
-        .map(|n| installed.dir.join("bin").join(format!("{n}{EXE_SUFFIX}")))
+        .map(|n| installed.program(n))
         .find(|p| p.exists())
         .with_context(|| format!("{} not found in {}", names[0], installed.dir.display()))
 }

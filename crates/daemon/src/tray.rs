@@ -190,7 +190,7 @@ impl Tray {
             (Unit::Redis, Kind::Redis, "Redis"),
             (Unit::Mailpit, Kind::Mailpit, "Mailpit"),
         ] {
-            if service::installed(layout, kind).is_empty() {
+            if !service::available(layout, kind) {
                 continue;
             }
             any = true;

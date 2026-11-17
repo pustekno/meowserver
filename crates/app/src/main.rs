@@ -1362,12 +1362,14 @@ fn load_versions(w: &AppWindow, layout: &Layout) {
     let b = w.global::<Backend>();
     let kind = selected_kind(w);
     let config = Config::load(layout).unwrap_or_default();
-    let active = service::select(layout, kind, config.version_selector(kind.id())).map(|i| i.version);
+    let active = service::select(layout, kind, config.version_selector(kind.id()));
+    let is_active =
+        |i: &service::Installed| active.as_ref().is_some_and(|a| a.version == i.version && a.dir == i.dir);
     let mut rows: Vec<VersionRow> = service::installed(layout, kind)
         .into_iter()
         .map(|i| VersionRow {
             version: i.version.to_string().into(),
-            active: Some(&i.version) == active.as_ref(),
+            active: is_active(&i),
             installed: true,
             verified: true,
             system_dir: SharedString::new(),
@@ -1375,7 +1377,7 @@ fn load_versions(w: &AppWindow, layout: &Layout) {
         .collect();
     rows.extend(service::system::found(layout, kind).into_iter().map(|i| VersionRow {
         version: i.version.to_string().into(),
-        active: false,
+        active: is_active(&i),
         installed: true,
         verified: true,
         system_dir: i.dir.display().to_string().into(),
