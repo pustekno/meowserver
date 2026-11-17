@@ -777,7 +777,8 @@ webview), Qt (licensing and size), GTK (looks foreign on Windows and macOS).
 - `meowserver` (GUI) and `meow` (CLI) are both **clients** of `meowd`. The
   tray's "Open" starts `meowserver`; closing the window ends that process. If
   `meowd` is not running, any client starts it. `meow up --headless` runs
-  `meowd` without a tray (Linux, dev servers).
+  `meowd` without a tray (Linux, dev servers); on Linux it also does so by
+  itself when neither `DISPLAY` nor `WAYLAND_DISPLAY` is set.
 - Children are bound to `meowd`: a **Job Object** on Windows, a process group
   plus `PR_SET_PDEATHSIG` on Linux, a process group plus a watchdog on macOS.
   Because of the split, a GUI crash never takes services down.

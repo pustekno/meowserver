@@ -38,7 +38,9 @@ and run it; `./MeowServer….AppImage meow status` runs the CLI. Both keep
 their data in `~/.local/share/meowserver` and serve projects from `~/www`;
 the portable `.tar.gz` keeps everything in its own folder. The tray needs
 an AppIndicator host (GNOME: the "AppIndicator and KStatusNotifierItem
-Support" extension, on by default in Ubuntu). Linux lets only root open
+Support" extension, on by default in Ubuntu). Without a graphical session
+(a server, an SSH login, a Raspberry Pi with no screen), `meow` runs the
+same services without a tray. Linux lets only root open
 ports below 1024, so the web server moves to 8080 and 8443 unless
 `net.ipv4.ip_unprivileged_port_start` allows them.
 

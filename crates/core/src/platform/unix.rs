@@ -54,6 +54,23 @@ pub fn spawn_detached(cmd: &mut Command) -> io::Result<Child> {
     cmd.spawn()
 }
 
+#[cfg(target_os = "macos")]
+pub fn has_display() -> bool {
+    true
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn has_display() -> bool {
+    display_in_env(|name| std::env::var_os(name))
+}
+
+/// X11 or Wayland, read through `var` so tests need not touch the process
+/// environment. An empty value counts as unset.
+#[cfg(not(target_os = "macos"))]
+fn display_in_env(var: impl Fn(&str) -> Option<std::ffi::OsString>) -> bool {
+    ["DISPLAY", "WAYLAND_DISPLAY"].iter().any(|name| var(name).is_some_and(|v| !v.is_empty()))
+}
+
 /// The user's locale from the environment, e.g. `id_ID.UTF-8`.
 pub fn locale() -> String {
     ["LC_ALL", "LC_MESSAGES", "LANG"]
@@ -156,4 +173,22 @@ pub fn run_elevated(program: &std::path::Path, args: &[String]) -> io::Result<i3
         Command::new("pkexec").arg(program).args(args).status()?
     };
     Ok(status.code().unwrap_or(-1))
+}
+
+#[cfg(all(test, not(target_os = "macos")))]
+mod tests {
+    use super::*;
+    use std::ffi::OsString;
+
+    fn env<'a>(pairs: &'a [(&'a str, &'a str)]) -> impl Fn(&str) -> Option<OsString> + 'a {
+        move |name| pairs.iter().find(|(k, _)| *k == name).map(|(_, v)| OsString::from(v))
+    }
+
+    #[test]
+    fn display_needs_x11_or_wayland() {
+        assert!(display_in_env(env(&[("DISPLAY", ":0")])));
+        assert!(display_in_env(env(&[("WAYLAND_DISPLAY", "wayland-0")])));
+        assert!(!display_in_env(env(&[])), "a server or SSH login has neither");
+        assert!(!display_in_env(env(&[("DISPLAY", "")])), "empty counts as unset");
+    }
 }

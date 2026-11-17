@@ -39,7 +39,9 @@ executable lalu jalankan; `./MeowServer….AppImage meow status` menjalankan
 CLI. Keduanya menyimpan data di `~/.local/share/meowserver` dan menyajikan
 proyek dari `~/www`; `.tar.gz` portable menyimpan semuanya di foldernya
 sendiri. Tray butuh host AppIndicator (GNOME: ekstensi "AppIndicator and
-KStatusNotifierItem Support", sudah aktif bawaan di Ubuntu). Linux hanya
+KStatusNotifierItem Support", sudah aktif bawaan di Ubuntu). Tanpa sesi
+grafis (server, login SSH, Raspberry Pi tanpa layar), `meow` menjalankan
+layanan yang sama tanpa tray. Linux hanya
 mengizinkan root membuka port di bawah 1024, jadi web server pindah ke 8080
 dan 8443 kecuali `net.ipv4.ip_unprivileged_port_start` mengizinkannya.
 
