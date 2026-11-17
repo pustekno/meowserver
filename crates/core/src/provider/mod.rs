@@ -104,14 +104,45 @@ pub fn for_service(kind: Kind) -> Option<Box<dyn Provider>> {
     })
 }
 
-/// What to do about a service with no download for this platform. System
-/// packages are not used yet (PRD F4), so a build has to go into `bin/`.
+/// What to do about a service with no download for this platform: a
+/// database or Redis from the system's packages is run as it is (PRD F4);
+/// anything else has to go into `bin/`.
 pub fn not_downloadable(service: &str, layout: &crate::layout::Layout) -> String {
-    format!(
-        "{service} cannot be downloaded on this platform yet; extract a build into {} \
-         (e.g. {service}/<version>/) and it is picked up",
-        layout.root().join("bin").display()
-    )
+    let bin = layout.root().join("bin");
+    let package = match crate::service::Kind::from_id(service) {
+        Some(kind) if crate::service::system::runs(kind) => system_package(kind),
+        _ => None,
+    };
+    match package {
+        Some(package) => format!(
+            "{service} cannot be downloaded on this platform yet; install it with the system's \
+             package manager ({package}) and MeowServer runs it, or extract a build into {} \
+             (e.g. {service}/<version>/)",
+            bin.display()
+        ),
+        None => format!(
+            "{service} cannot be downloaded on this platform yet; extract a build into {} \
+             (e.g. {service}/<version>/) and it is picked up",
+            bin.display()
+        ),
+    }
+}
+
+/// The usual package for a service MeowServer runs from the system.
+fn system_package(kind: crate::service::Kind) -> Option<&'static str> {
+    use crate::service::Kind;
+    let mac = os() == Os::MacOs;
+    Some(match kind {
+        Kind::Mysql if mac => "brew install mysql",
+        Kind::Mysql => "e.g. apt install mysql-server",
+        Kind::Mariadb if mac => "brew install mariadb",
+        Kind::Mariadb => "e.g. apt install mariadb-server",
+        Kind::Postgres if mac => "brew install postgresql@17",
+        Kind::Postgres => "e.g. apt install postgresql",
+        Kind::Redis if mac => "brew install redis",
+        Kind::Redis => "e.g. apt install redis-server",
+        _ => return None,
+    })
 }
 
 /// The second sentence of "X is not installed": the command to get it, or

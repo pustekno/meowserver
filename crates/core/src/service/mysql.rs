@@ -14,7 +14,7 @@ use serde::Serialize;
 use super::{Installed, Kind, datadir, write_generated};
 use crate::config::Config;
 use crate::layout::Layout;
-use crate::platform::{EXE_SUFFIX, Os, os};
+use crate::platform::{Os, os};
 use crate::supervisor::{Invocation, ProcessSpec, Restart};
 use crate::template;
 use crate::version::Version;
@@ -241,7 +241,7 @@ fn bind_address(kind: Kind, version: &Version) -> &'static str {
 }
 
 fn tool(installed: &Installed, name: &str) -> PathBuf {
-    installed.dir.join("bin").join(format!("{name}{EXE_SUFFIX}"))
+    installed.program(name)
 }
 
 fn server_exe(kind: Kind, installed: &Installed) -> PathBuf {
@@ -269,7 +269,10 @@ fn initialize(layout: &Layout, kind: Kind, installed: &Installed, ini: &Path, da
             c
         }
         _ => {
-            let mut c = crate::platform::command(installed.dir.join("scripts").join("mariadb-install-db"));
+            // In `scripts` in MariaDB's archive, in `bin` from a package.
+            let archive = installed.dir.join("scripts").join("mariadb-install-db");
+            let script = if archive.is_file() { archive } else { tool(installed, "mariadb-install-db") };
+            let mut c = crate::platform::command(script);
             c.arg("--no-defaults")
                 .arg(format!("--basedir={}", installed.dir.display()))
                 .arg(format!("--datadir={}", data.display()))

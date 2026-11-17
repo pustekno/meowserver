@@ -14,8 +14,10 @@ Tanpa iklan. Tanpa telemetri. Tanpa akun.
 > PostgreSQL, dan Redis belum bisa diunduh di sana, tapi build yang
 > ditautkan ke `bin/<layanan>/<versi>/` (misalnya dari Homebrew) dipakai.
 > Di Linux (Ubuntu 24.04, x86_64 dan arm64) jendela, tray, Caddy, PHP, dan
-> Composer jalan, dan MariaDB bisa diunduh di x86_64; MySQL, Nginx, Apache,
-> PostgreSQL, dan Redis juga perlu build yang ditautkan ke `bin/`. Lihat
+> Composer jalan, dan MariaDB bisa diunduh di x86_64. MySQL, MariaDB,
+> PostgreSQL, dan Redis yang dipasang lewat paket sistem (misalnya apt)
+> langsung dijalankan dengan konfigurasi dan data milik MeowServer; Nginx
+> dan Apache masih perlu build yang ditautkan ke `bin/`. Lihat
 > [`docs/PRD.md`](docs/PRD.md) §16.
 
 ## Unduh

@@ -1268,7 +1268,7 @@ or another OS).
 | F1 start/stop, login item | Tested | F21 php.ini quick settings | Built |
 | F2 versions | Tested | F22 mail capture | Tested (PHP mail() → Mailpit) |
 | F3 official downloads | Tested (11 sources) | F23 database init | Tested |
-| F4 system binaries | Not started | F24 data per version | Tested |
+| F4 system binaries | Databases and Redis tested on Linux arm64 (Debian 13 apt: MariaDB 11.8, PostgreSQL 17, Redis 8); Nginx/Apache not yet | F24 data per version | Tested |
 | F5 bring your own binary | Tested | F25 data upgrade | Tested (MariaDB 11.4 → 11.8) |
 | F6 automatic sites | Tested (0.74 s) | F26 backup/restore | Tested (MySQL) |
 | F7 project list | Tested | F27 import (Laragon, XAMPP, WampServer, FlyEnv) | Detection tested here (Laragon, FlyEnv) and with fixture folders (XAMPP, Wamp, FlyEnv sites); copy not yet run on real data |

@@ -5,8 +5,10 @@
 //! Versions installed outside MeowServer: on `PATH`, or in the folders the
 //! official installers use. They show as "System" next to MeowServer's own.
 //! MeowServer never changes or removes them. Projects can run on a system
-//! Node.js, Python, or Go (PRD F43); PHP and databases are only listed,
-//! since MeowServer runs its own copies of those.
+//! Node.js, Python, or Go (PRD F43). On macOS and Linux, MeowServer also
+//! runs a system MySQL, MariaDB, PostgreSQL, or Redis with its own config,
+//! data folder, and process (PRD F4): there is no download of those for
+//! every platform. PHP is only listed, since MeowServer runs its own.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -18,6 +20,13 @@ use super::{Installed, Kind};
 use crate::layout::Layout;
 use crate::platform::{EXE_SUFFIX, Os, is_inside, os};
 use crate::version::Version;
+
+/// True if MeowServer runs a system build of `kind` (PRD F4). Windows has a
+/// download for each of these, and its installers register services of
+/// their own.
+pub fn runs(kind: Kind) -> bool {
+    os() != Os::Windows && matches!(kind, Kind::Mysql | Kind::Mariadb | Kind::Postgres | Kind::Redis)
+}
 
 /// Versions of `kind` found on this computer outside MeowServer's folder,
 /// newest first.
@@ -64,6 +73,8 @@ fn probe(kind: Kind) -> Option<Probe> {
         Kind::Php => ("php", &["-n", "-v"], false),
         Kind::Mysql | Kind::Mariadb => ("mysqld", &["--version"], true),
         Kind::Postgres => ("postgres", &["--version"], true),
+        // Used where it is, like a Windows download: the program at the top.
+        Kind::Redis => ("redis-server", &["--version"], false),
         _ => return None,
     };
     Some(Probe { program, args, in_bin })
@@ -113,6 +124,17 @@ fn candidates(kind: Kind) -> Vec<PathBuf> {
                 found.extend(subfolders(&scoop.join("apps"), prefix).into_iter().map(|d| d.join("current")));
             }
             dirs.extend(found.into_iter().map(|d| if in_bin { d.join("bin") } else { d }));
+        }
+    }
+    if os() != Os::Windows {
+        // Package managers put servers in sbin, which a user's PATH often
+        // lacks (Debian), and PostgreSQL in a folder per major version.
+        dirs.extend(["/usr/local/sbin", "/usr/sbin"].map(PathBuf::from));
+        if kind == Kind::Postgres {
+            // Debian and Ubuntu; then the PostgreSQL RPMs.
+            let debian = subfolders(Path::new("/usr/lib/postgresql"), "");
+            let rpm = subfolders(Path::new("/usr"), "pgsql-");
+            dirs.extend(debian.into_iter().chain(rpm).map(|d| d.join("bin")));
         }
     }
     // Windows' `python.exe` in WindowsApps opens the Store instead of
@@ -206,11 +228,11 @@ fn run(exe: &Path, args: &[&str]) -> Option<String> {
 /// The first dotted version in a program's first line of output:
 /// `v24.13.0`, `Python 3.14.3`, `go version go1.23.4 windows/amd64`,
 /// `PHP 8.3.33 (cli)`, `mysqld  Ver 10.11.6-MariaDB for Win64`,
-/// `postgres (PostgreSQL) 17.2`.
+/// `postgres (PostgreSQL) 17.2`, `Redis server v=8.0.2 sha=…`.
 fn parse_version(output: &str) -> Option<Version> {
     let line = output.lines().find(|l| !l.trim().is_empty())?;
     line.split_whitespace().find_map(|token| {
-        let token = token.trim_start_matches("go").trim_start_matches('v');
+        let token = token.trim_start_matches("go").trim_start_matches('v').trim_start_matches('=');
         let end = token.find(|c: char| !c.is_ascii_digit() && c != '.').unwrap_or(token.len());
         let number = token[..end].trim_end_matches('.');
         if !number.contains('.') {
@@ -237,6 +259,16 @@ mod tests {
         assert_eq!(parse_version("C:\\mysql\\bin\\mysqld.exe  Ver 8.0.46 for Win64"), v("8.0.46"));
         assert_eq!(parse_version("mysqld  Ver 10.11.6-MariaDB for Win64 (AMD64)"), v("10.11.6"));
         assert_eq!(parse_version("postgres (PostgreSQL) 17.2"), v("17.2"));
+        assert_eq!(
+            parse_version("Redis server v=8.0.2 sha=00000000:0 malloc=jemalloc-5.3.0 bits=64"),
+            v("8.0.2")
+        );
+        assert_eq!(
+            parse_version(
+                "/usr/sbin/mariadbd  Ver 11.8.6-MariaDB-0+deb13u1 from Debian for debian-linux-gnu"
+            ),
+            v("11.8.6")
+        );
         assert_eq!(parse_version("not a version"), None);
     }
 }

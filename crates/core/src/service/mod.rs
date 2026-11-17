@@ -156,6 +156,15 @@ impl Installed {
     pub fn exe(&self, rel: &str) -> PathBuf {
         self.dir.join(format!("{rel}{}", crate::platform::EXE_SUFFIX))
     }
+
+    /// A program in `bin`, or in `sbin` where system packages put servers
+    /// (`/usr/sbin/mariadbd`, PRD F4). The `bin` path when it is in
+    /// neither, so an error names the expected place.
+    pub fn program(&self, name: &str) -> PathBuf {
+        let at = |sub: &str| self.dir.join(sub).join(format!("{name}{}", crate::platform::EXE_SUFFIX));
+        let sbin = at("sbin");
+        if !at("bin").is_file() && sbin.is_file() { sbin } else { at("bin") }
+    }
 }
 
 /// Installed versions of `kind`, newest first.
@@ -175,11 +184,24 @@ pub fn installed(layout: &Layout, kind: Kind) -> Vec<Installed> {
     out
 }
 
-/// The installed version matching `selector`, or the newest one.
+/// The version to run: the installed one matching `selector`, or the
+/// newest. On macOS and Linux a database or Redis from the system's
+/// packages counts too (PRD F4); MeowServer's own copy wins over a system
+/// one of the same version. System builds are never in [`installed`], so
+/// uninstalling cannot reach them.
 pub fn select(layout: &Layout, kind: Kind, selector: Option<&str>) -> Option<Installed> {
-    let all = installed(layout, kind);
+    let mut all = installed(layout, kind);
+    if system::runs(kind) {
+        all.extend(system::found(layout, kind));
+    }
     let best = version::pick(all.iter().map(|i| &i.version), selector)?.clone();
     all.into_iter().find(|i| i.version == best)
+}
+
+/// True if some version of `kind` can run: MeowServer's own, or a system
+/// build it runs (PRD F4).
+pub fn available(layout: &Layout, kind: Kind) -> bool {
+    select(layout, kind, None).is_some()
 }
 
 /// Versions a project's runtime (Node.js, Python, Go) can run on:
@@ -219,4 +241,29 @@ pub fn pin_before_install(layout: &Layout, kind: Kind) -> anyhow::Result<()> {
 /// Writes a generated config file, creating its folder.
 pub(crate) fn write_generated(path: &Path, text: &str) -> anyhow::Result<()> {
     crate::config::write_atomic(path, text.as_bytes())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn programs_are_found_in_sbin_when_bin_lacks_them() {
+        let root = std::env::temp_dir().join(format!("meow-program-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        for (sub, name) in
+            [("bin", "mariadb-admin"), ("sbin", "mariadbd"), ("bin", "mysqld"), ("sbin", "mysqld")]
+        {
+            std::fs::create_dir_all(root.join(sub)).unwrap();
+            std::fs::write(root.join(sub).join(format!("{name}{}", crate::platform::EXE_SUFFIX)), "")
+                .unwrap();
+        }
+        let usr = Installed { kind: Kind::Mariadb, version: "11.8.6".parse().unwrap(), dir: root.clone() };
+        let exe = |name: &str| format!("{name}{}", crate::platform::EXE_SUFFIX);
+        assert_eq!(usr.program("mariadbd"), root.join("sbin").join(exe("mariadbd")), "a system server");
+        assert_eq!(usr.program("mariadb-admin"), root.join("bin").join(exe("mariadb-admin")));
+        assert_eq!(usr.program("mysqld"), root.join("bin").join(exe("mysqld")), "bin wins over sbin");
+        assert_eq!(usr.program("missing"), root.join("bin").join(exe("missing")), "errors name bin");
+        std::fs::remove_dir_all(&root).unwrap();
+    }
 }

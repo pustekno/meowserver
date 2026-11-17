@@ -14,8 +14,10 @@ No ads. No telemetry. No account.
 > PostgreSQL, and Redis have no download there yet, but a build linked
 > into `bin/<service>/<version>/` (e.g. from Homebrew) is used. On Linux
 > (Ubuntu 24.04, x86_64 and arm64) the window, tray, Caddy, PHP, and
-> Composer run, and MariaDB downloads on x86_64; MySQL, Nginx, Apache,
-> PostgreSQL, and Redis need a build linked into `bin/` there too. See
+> Composer run, and MariaDB downloads on x86_64. MySQL, MariaDB,
+> PostgreSQL, and Redis installed with the system's packages (for
+> example apt) are run as they are, with MeowServer's own config and data; Nginx
+> and Apache still need a build linked into `bin/`. See
 > [`docs/PRD.md`](docs/PRD.md) §16 for the plan.
 
 ## Download

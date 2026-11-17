@@ -56,13 +56,16 @@ pub fn list(layout: &Layout, service: &str, available: bool, json: bool) -> Resu
         println!("No {service} versions installed. See `meow list {service} --available`.");
     }
     let config = Config::load(layout)?;
-    let active = service::select(layout, kind, config.version_selector(kind.id())).map(|i| i.version);
-    for i in installed {
-        let mark = if Some(&i.version) == active.as_ref() { "  (active)" } else { "" };
+    let active = service::select(layout, kind, config.version_selector(kind.id()));
+    let is_active =
+        |i: &service::Installed| active.as_ref().is_some_and(|a| a.version == i.version && a.dir == i.dir);
+    for i in &installed {
+        let mark = if is_active(i) { "  (active)" } else { "" };
         println!("{}{mark}", i.version);
     }
-    for i in system {
-        println!("{}  (system: {})", i.version, i.dir.display());
+    for i in &system {
+        let mark = if is_active(i) { ", active" } else { "" };
+        println!("{}  (system: {}{mark})", i.version, i.dir.display());
     }
     Ok(())
 }
@@ -124,6 +127,14 @@ pub fn uninstall(layout: &Layout, service: &str, selector: &str) -> Result<()> {
     let Some(found) =
         service::installed(layout, kind).into_iter().find(|i| i.version.to_string() == selector)
     else {
+        if let Some(system) =
+            service::system::found(layout, kind).into_iter().find(|i| i.version.to_string() == selector)
+        {
+            bail!(
+                "{service} {selector} in {} belongs to the system; remove it with the package manager",
+                system.dir.display()
+            );
+        }
         bail!("{service} {selector} is not installed (give the full version, see `meow list {service}`)");
     };
     if meow_core::ipc::Client::connect(layout).is_ok() {
